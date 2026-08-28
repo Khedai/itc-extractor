@@ -156,8 +156,12 @@
     return prefix + '-' + new Date().toISOString().split('T')[0] + '.pdf';
   }
 
-  async function generatePdf() {
-    return await window.ITCPdf.generate($('formPage'));
+  // FormSubmit's hard attachment limit is 10 MB (see js/email.js); keep the
+  // check in sync with it so a too-large PDF is re-rendered smaller, not dropped.
+  const MAX_ATTACH_BYTES = (window.ITCEmail && window.ITCEmail.MAX_ATTACHMENT_BYTES) || 10 * 1024 * 1024;
+
+  async function generatePdf(opts) {
+    return await window.ITCPdf.generate($('formPage'), opts);
   }
 
   async function handleSubmit() {
@@ -165,8 +169,22 @@
     btn.disabled = true;
     btn.textContent = 'Preparing PDF…';
     try {
-      const blob = await generatePdf();
+      let blob = await generatePdf();
+
+      // The rendered form is normally well under 10 MB, but if it ever exceeds
+      // FormSubmit's limit, re-render at a lower resolution/quality instead of
+      // failing — a credit-application form still reads fine at that size.
+      if (blob.size > MAX_ATTACH_BYTES) {
+        btn.textContent = 'Compressing PDF…';
+        blob = await generatePdf({ scale: 1.4, quality: 0.65 });
+        if (blob.size > MAX_ATTACH_BYTES) {
+          showResult(false, 'The PDF is ' + (blob.size / 1048576).toFixed(1) + ' MB — over the email service\'s 10 MB limit. Nothing was sent; your draft is still saved in this browser.');
+          return;
+        }
+      }
+
       const filename = makeFilename();
+      btn.textContent = 'Sending email…';
       const res = await window.ITCEmail.send(blob, filename, CONFIG);
       showResult(res.ok, res.msg);
     } catch (e) {

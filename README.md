@@ -68,10 +68,32 @@ window.ITC_CONFIG = {
 ```
 
 Email is sent through **FormSubmit.co** — a free, no-backend service that works
-from any static host.
+from any static host. The filled form is attached to the email as a **PDF**
+(field `attachment`, up to FormSubmit's 10 MB limit; the app auto-compresses
+the PDF and re-sends if it ever gets too large).
 
-- The **first** time you send, FormSubmit emails an **activation link** to the
-  recipient address; click it once and everything works afterwards.
+### First send = activation (why you may only see a "form submission" notification)
+
+The **first** submission to a new recipient address does **not** deliver the
+PDF. FormSubmit emails the recipient a one-time **activation / notification**
+email instead, and the recipient must click the **activation link** inside it.
+From then on, every submission arrives with the PDF attached. If the only email
+you ever received was a "form submission" notification, that was this
+activation email — click its link, then press **Submit & Email** again.
+
+### "From" and replying
+
+FormSubmit sends from its own generic address — the sender **cannot** be
+customised with this service. The app sets **Reply-To** to the applicant's email
+address (field `fEmail`), so replying to the notification in your mail client
+goes straight back to the applicant. The email body also lists the applicant's
+name, ID number and date so the notification itself is useful.
+
+FormSubmit advertises **unlimited forms and submissions** — there is no
+published daily or monthly cap — but every submission is limited to **10 MB** of
+attachments and the service spam-filters submissions, so very high volumes can
+occasionally be throttled.
+
 - If the address is left empty (or sending fails / there's no internet),
   **nothing is sent and nothing is downloaded** — the draft stays autosaved in
   the browser, ready to retry.
