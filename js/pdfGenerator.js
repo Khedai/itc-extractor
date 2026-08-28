@@ -1,9 +1,61 @@
 // PDF generation — renders the application form to a multi-page A4 landscape
 // PDF (matching the wide desktop layout) using html2canvas + jsPDF, then
-// returns the PDF as a Blob. Page breaks are snapped to the top of each section
-// so a block (e.g. the Expenses & Consent declaration) is never cut off.
+// returns the PDF as a Blob. Page breaks are detected from the rendered canvas
+// itself (uniform divider lines / blank gutters), so a page never cuts through
+// a word or a table cell, on any device.
 (function () {
   'use strict';
+
+  // Find horizontal "clean" rows in the rendered canvas — section divider
+  // lines, table rules and blank gutters. Cutting on one of these is guaranteed
+  // never to slice through a word or a table cell. Because they are measured
+  // from the canvas itself they are pixel-accurate on every device (DOM rects
+  // are NOT reliable: the clone on a phone is laid out with the mobile media
+  // queries, while html2canvas renders the desktop layout).
+  function detectBreakLines(canvas, imgH) {
+    const sample = 0.5; // scan at half resolution, then scale back up
+    const sw = Math.max(1, Math.round(canvas.width * sample));
+    const sh = Math.max(1, Math.round(canvas.height * sample));
+    const small = document.createElement('canvas');
+    small.width = sw;
+    small.height = sh;
+    const sctx = small.getContext('2d');
+    sctx.drawImage(canvas, 0, 0, sw, sh);
+    const data = sctx.getImageData(0, 0, sw, sh).data;
+    const x0 = Math.floor(sw * 0.05);
+    const x1 = sw - Math.floor(sw * 0.05);
+    const clean = [];
+    for (let y = 0; y < sh; y++) {
+      let sum = 0;
+      let sumSq = 0;
+      let n = 0;
+      for (let x = x0; x < x1; x += 2) {
+        const o = (y * sw + x) * 4;
+        const lum = 0.299 * data[o] + 0.587 * data[o + 1] + 0.114 * data[o + 2];
+        sum += lum;
+        sumSq += lum * lum;
+        n++;
+      }
+      const mean = sum / n;
+      if (sumSq / n - mean * mean < 100) clean.push(y); // uniform row (std dev < 10)
+    }
+    // Group adjacent clean rows into single lines.
+    const lines = [];
+    let start = null;
+    let prev = null;
+    for (const y of clean) {
+      if (start === null) { start = y; prev = y; continue; }
+      if (y - prev > 3) { lines.push((start + prev) / 2); start = y; }
+      prev = y;
+    }
+    if (start !== null) lines.push((start + prev) / 2);
+    // Convert back to full-resolution pixels, cutting 2px below the line's top:
+    // the boundary then falls exactly between the divider line and the content
+    // that follows, so nothing is ever sliced.
+    return lines
+      .map((y) => Math.round(y / sample + 2))
+      .filter((y) => y > 1 && y < imgH - 2);
+  }
 
   // opts: { scale, quality } — lower both to shrink the output when it would
   // exceed FormSubmit's 10 MB attachment limit (see js/email.js / js/app.js).
@@ -16,8 +68,8 @@
     const quality = (opts && opts.quality) != null ? opts.quality : 0.92;
 
     // The form is designed for a wide desktop layout. Rendering a hidden clone
-    // at this fixed width keeps phone/desktop PDFs identical and lets the DOM
-    // measurements below line up pixel-for-pixel with the canvas.
+    // at this fixed width keeps phone/desktop PDFs identical and matches the
+    // canvas html2canvas produces (see detectBreakLines).
     const PDF_LAYOUT_WIDTH = 1500;
 
     const clone = elm.cloneNode(true);
@@ -61,18 +113,21 @@
       const mmPerPx = pageW / imgW;              // one canvas pixel, in mm
       const pageHeightPx = pageH / mmPerPx;      // one A4 page tall, in canvas px
 
-      // Candidate page breaks = the top of every section, section title and the
-      // footer. A page break snaps to the last candidate that fits on the page,
-      // so a block (e.g. the Expenses & Consent declaration) is never split.
-      const rect = clone.getBoundingClientRect();
-      const tops = [];
-      clone.querySelectorAll('.section, .section-title, .footer').forEach((b) => {
-        const y = b.getBoundingClientRect().top - rect.top;
-        if (y > 1) tops.push(y);
-      });
-      tops.sort((a, b) => a - b);
-      const mapped = tops.map((y) => y * scale - 2).filter((y) => y > 1 && y < imgH);
-      const breakPoints = mapped.filter((y, i) => i === 0 || y - mapped[i - 1] > 2);
+      // Safe page-break lines, measured from the rendered canvas itself so they
+      // are pixel-accurate on every device (see detectBreakLines).
+      let breakPoints = detectBreakLines(canvas, imgH);
+      // Fallback (should never be needed): section tops measured from the DOM.
+      if (breakPoints.length === 0) {
+        const rect = clone.getBoundingClientRect();
+        const tops = [];
+        clone.querySelectorAll('.section, .section-title, .footer').forEach((b) => {
+          const y = b.getBoundingClientRect().top - rect.top;
+          if (y > 1 && y < imgH) tops.push(y);
+        });
+        tops.sort((a, b) => a - b);
+        const mapped = tops.map((y) => y * scale - 2).filter((y) => y > 1 && y < imgH);
+        breakPoints = mapped.filter((y, i) => i === 0 || y - mapped[i - 1] > 2);
+      }
 
       let cursor = 0;
       let pageNo = 0;
