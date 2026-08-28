@@ -1,0 +1,110 @@
+:root {
+  --navy:#102a5c;
+  --blue:#173b78;
+  --line:#9aa8bd;
+  --light:#f7f9fc;
+  --red:#c21f2f;
+}
+*{box-sizing:border-box}
+body{margin:0;background:#eef1f5;font-family:Arial,Helvetica,sans-serif;color:#111;font-size:13px}
+.toolbar{position:sticky;top:0;z-index:50;background:#fff;border-bottom:1px solid #bbb;padding:8px 12px;display:flex;gap:8px;justify-content:center;flex-wrap:wrap}
+.draft-note{background:#fff8e1;border-bottom:1px solid #e2d6a0;color:#6b5b00;text-align:center;padding:4px 12px;font-size:12px;font-weight:bold}
+button{border:0;padding:8px 14px;border-radius:3px;font-weight:bold;cursor:pointer}
+.btn{background:var(--navy);color:#fff} .btn.secondary{background:#666} .btn.red{background:var(--red)}
+.btn:disabled{opacity:.55;cursor:wait}
+.page{width:min(1500px,98vw);margin:12px auto;background:#fff;border:1px solid var(--line);box-shadow:0 2px 10px #0002}
+.top{display:grid;grid-template-columns:1fr 1fr 1fr;align-items:center;padding:8px 10px 3px;border-bottom:2px solid var(--navy)}
+.top-left,.top-mid,.top-right{display:flex;align-items:center;gap:8px}
+.top-left{min-width:0}
+.top-mid{justify-content:center}
+.top-right{justify-content:flex-end}
+.logo{height:72px;width:auto;max-width:430px;object-fit:contain;flex:0 1 auto}
+.title{font-size:29px;font-weight:800;letter-spacing:1px;color:var(--navy);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+label{font-weight:bold}
+input,select,textarea{font:inherit;border:1px solid #9da8b6;background:#fff;padding:5px;height:28px;width:100%;min-width:0}
+select{padding:3px}
+textarea{height:55px;resize:vertical}
+.date{width:145px}
+.section-title{font-size:16px;font-weight:800;color:var(--navy);padding:5px 8px;border-bottom:1px solid var(--navy)}
+.section{border-bottom:1px solid var(--line)}
+.app-type{display:flex;align-items:center;gap:10px;padding:7px 10px}
+.app-type select{width:235px}
+.personal{display:grid;grid-template-columns:1.25fr 1fr 1fr;gap:0;border-top:1px solid var(--line)}
+.col{padding:5px 9px;border-right:1px solid var(--line)}
+.col:last-child{border-right:0}
+.field{display:grid;grid-template-columns:125px 1fr;align-items:center;gap:7px;margin:3px 0}
+.field.short{grid-template-columns:95px 1fr}
+.address{height:55px}
+.details{display:grid;grid-template-columns:1fr 1fr 1fr;border-top:1px solid var(--line)}
+.details>div{padding:5px 9px;border-right:1px solid var(--line)}
+.details>div:last-child{border-right:0}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.income-docs{display:grid;grid-template-columns:1fr 1fr 1fr;border-top:1px solid var(--line)}
+.income{padding:5px 9px;border-right:1px solid var(--line)}
+.income .field{grid-template-columns:105px 1fr}
+.docs{grid-column:2/4;padding:5px 9px}
+.doc-grid{display:grid;grid-template-columns:repeat(3,1fr);border:1px solid var(--line)}
+.doc{text-align:center;padding:8px;border-right:1px solid var(--line);font-weight:bold}
+.doc:last-child{border-right:0}
+.doc input{width:17px;height:17px;vertical-align:middle;margin-top:7px}
+.main{display:grid;grid-template-columns:2.25fr 1fr}
+.loans{padding:5px 8px;border-right:1px solid var(--line)}
+.side{padding:5px 9px}
+table{width:100%;border-collapse:collapse;table-layout:fixed}
+th{background:var(--navy);color:#fff;padding:5px;border:1px solid #fff;font-size:12px;white-space:nowrap;overflow:hidden}
+td{border:1px solid var(--line);padding:2px;overflow:hidden}
+td input,td select{border:0;height:25px;padding:3px}
+/* Column widths must total exactly 100% so no cell collapses or overlaps. */
+.rowno{width:4%;min-width:24px;text-align:center}
+.creditor{width:18%} .acc{width:13%} .bal,.cur,.red{width:12%} .arr{width:13%} .atype{width:10%} .st{width:6%}
+.money{text-align:right;white-space:nowrap}
+.total td{font-weight:800;color:var(--navy);font-size:13px;padding:4px 3px;white-space:nowrap}
+.side .field{grid-template-columns:125px 1fr}
+.debit{border:1px solid var(--line);padding:12px;margin-bottom:12px}
+.debit .amount input{font-weight:800;color:var(--red);font-size:15px}
+.signature{border:1px solid var(--line);padding:8px}
+.sigbox{height:55px;border:1px solid #aaa;margin-top:5px}
+.expense-consent{display:grid;grid-template-columns:1fr 2fr;border-top:1px solid var(--line)}
+.expenses{padding:6px 9px;border-right:1px solid var(--line)}
+.expenses .field{grid-template-columns:145px 1fr}
+.consent{padding:9px}
+.consent-box{border:1px solid var(--line);padding:10px;line-height:1.35}
+.footer{display:flex;justify-content:space-around;align-items:center;padding:8px;border-top:1px solid var(--line);font-size:12px}
+.footer input[type=text]{width:85px}
+.checkline{display:flex;gap:12px;align-items:center}
+.checkline label{font-weight:normal}
+@media(max-width:1300px){
+.title{font-size:22px}
+.logo{max-width:300px}
+}
+@media(max-width:1000px){
+.top{grid-template-columns:1fr}
+.top-mid,.top-right{justify-content:flex-start}
+.personal,.details,.income-docs,.main,.expense-consent{grid-template-columns:1fr}
+.docs{grid-column:auto}
+.income,.loans{border-right:0}
+}
+@media print{
+.toolbar,.draft-note,.itc-panel,.result-panel{display:none} body{background:#fff} .page{width:100%;margin:0;box-shadow:none}
+}
+
+.itc-panel{margin:8px 10px;border:1px solid #9aa8bd;background:#f7f9fc;padding:8px}
+.itc-title{font-size:15px;font-weight:800;color:#102a5c;margin-bottom:6px}
+.itc-grid{display:grid;grid-template-columns:1.5fr 1fr auto;gap:8px;align-items:end}
+.itc-grid label{display:flex;flex-direction:column;gap:4px}
+.itc-grid input{height:30px}
+.itc-status{margin-top:7px;padding:6px;border:1px solid #c8d0dc;background:#fff;font-weight:bold}
+.itc-status.ok{border-color:#5b9b72;background:#edf8f0;color:#145c2e}
+.itc-status.err{border-color:#c66;background:#fff0f0;color:#8a1111}
+@media(max-width:1000px){.itc-grid{grid-template-columns:1fr}}
+
+.tracker-note{margin:6px 10px;padding:7px 9px;border:1px solid #9aa8bd;background:#f7f9fc;color:#102a5c;font-weight:bold}.tracker-count{font-weight:normal;margin-left:8px}
+
+/* ── App-specific additions ─────────────────────────── */
+/* Highlight fields that were filled automatically from the ITC report */
+.filled{background:#e9f7ec !important;border-color:#5b9b72 !important}
+.result-panel{margin:8px 10px;border:1px solid #5b9b72;background:#edf8f0;padding:10px;display:none}
+.result-panel.show{display:block}
+.result-panel.ok{border-color:#5b9b72;color:#145c2e}
+.result-panel.err{border-color:#c66;background:#fff0f0;color:#8a1111}
+.itc-grid .btn{height:30px;display:inline-flex;align-items:center}

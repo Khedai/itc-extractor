@@ -1,0 +1,13 @@
+# OS / editor junk
+.DS_Store
+Thumbs.db
+*.log
+
+# Node / tooling
+node_modules/
+
+# Vercel local state
+.vercel/
+
+# Datanamix ITC reports and any PDFs — private data, never commit
+*.pdf

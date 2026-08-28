@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Khusela ITC Extractor</title>
+  <meta name="description" content="Extract Datanamix ITC credit reports into a credit-application form, export as PDF and email it.">
+  <meta name="theme-color" content="#102a5c">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icons/icon-192.png?v=2" type="image/png">
+  <link rel="apple-touch-icon" href="icons/icon-192.png?v=2">
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+
+  <!-- Toolbar -->
+  <div class="toolbar">
+    <button class="btn secondary" id="btnReset">Reset Form</button>
+    <button class="btn red" id="btnSubmit">Submit &amp; Email</button>
+  </div>
+  <div class="draft-note">Drafts are autosaved on this device only &mdash; never uploaded, never downloadable.</div>
+
+  <!-- ITC extraction panel -->
+  <div class="itc-panel">
+    <div class="itc-title">ITC Report Extraction</div>
+    <div class="itc-grid">
+      <label>Datanamix ITC PDF
+        <input type="file" id="itcFile" accept="application/pdf">
+      </label>
+      <label>PDF Password (if protected)
+        <input type="password" id="itcPassword">
+      </label>
+      <button class="btn" id="btnExtract">Extract &amp; Fill Form</button>
+    </div>
+    <div class="itc-status" id="itcStatus">No report loaded yet. Upload a Datanamix ITC PDF and click <b>Extract &amp; Fill Form</b>.</div>
+  </div>
+
+  <!-- Result feedback (email / status) -->
+  <div class="result-panel" id="resultPanel"></div>
+
+  <!-- The application form -->
+  <div class="page" id="formPage">
+    <div class="top">
+      <div class="top-left">
+        <img class="logo" src="logo.png" alt="Khusela">
+        <div class="title">CREDIT APPLICATION</div>
+      </div>
+      <div class="top-mid">
+        <label>Date: <input type="date" class="date" id="fDate"></label>
+      </div>
+      <div class="top-right">
+        <label>Ref: <input type="text" id="fAppRef"></label>
+      </div>
+    </div>
+
+    <!-- Application type -->
+    <div class="section">
+      <div class="section-title">Application Type</div>
+      <div class="app-type">
+        <label>Type of application</label>
+        <select id="fAppType">
+          <option value="">— Select —</option>
+          <option>New Loan</option>
+          <option>Consolidation</option>
+          <option>Debt Review</option>
+          <option>Home Loan</option>
+          <option>Other</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- Consumer identity -->
+    <div class="section">
+      <div class="section-title">Consumer Identity Information</div>
+      <div class="personal">
+        <div class="col">
+          <div class="field"><label>Surname</label><input id="fSurname"></div>
+          <div class="field"><label>First Name</label><input id="fFirst"></div>
+          <div class="field"><label>Second Name</label><input id="fSecond"></div>
+          <div class="field"><label>Maiden Name</label><input id="fMaiden"></div>
+          <div class="field"><label>ID Number</label><input id="fId"></div>
+          <div class="field"><label>Passport No</label><input id="fPassport"></div>
+        </div>
+        <div class="col">
+          <div class="field"><label>Title</label><input id="fTitle"></div>
+          <div class="field"><label>Gender</label><input id="fGender"></div>
+          <div class="field"><label>Birth Date</label><input id="fBirth"></div>
+          <div class="field"><label>Home Tel</label><input id="fHomeTel"></div>
+          <div class="field"><label>Work Tel</label><input id="fWorkTel"></div>
+          <div class="field"><label>Cellular No</label><input id="fCell"></div>
+          <div class="field"><label>Email</label><input id="fEmail"></div>
+          <div class="field"><label>Marital Status</label><input id="fMarital"></div>
+        </div>
+        <div class="col">
+          <div class="field"><label>Employer</label><input id="fEmployer"></div>
+          <div class="field"><label>Residential Address</label><textarea id="fResidential" class="address"></textarea></div>
+          <div class="field"><label>Postal Address</label><textarea id="fPostal" class="address"></textarea></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Report details (from ITC) -->
+    <div class="section">
+      <div class="section-title">Report Details</div>
+      <div class="details">
+        <div>
+          <div class="field short"><label>Report Ref</label><input id="fReportRef"></div>
+          <div class="field short"><label>Client Ref</label><input id="fClientRef"></div>
+          <div class="field short"><label>Search Date</label><input id="fSearchDate"></div>
+          <div class="field short"><label>Consumer Score</label><input id="fScore"></div>
+        </div>
+        <div>
+          <div class="field short"><label>Risk Category</label><input id="fRisk"></div>
+          <div class="field short"><label>Score Date</label><input id="fScoreDate"></div>
+          <div class="field short"><label>Exception Code</label><input id="fExceptionCode"></div>
+          <div class="field short"><label>Debt Review</label><input id="fDebtReview"></div>
+        </div>
+        <div>
+          <div class="field short"><label>Home Affairs</label><input id="fHomeVerification"></div>
+          <div class="field short"><label>Deceased Status</label><input id="fHomeDeceased"></div>
+          <div class="field short"><label>Judgements</label><input id="fJudgements"></div>
+          <div class="field short"><label>Defaults</label><input id="fDefaults"></div>
+          <div class="field short"><label>Adverse Info</label><input id="fAdverse"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Income & documentation (manual) -->
+    <div class="section">
+      <div class="section-title">Income &amp; Documentation</div>
+      <div class="income-docs">
+        <div class="income">
+          <div class="field"><label>Gross Income</label><input id="fGrossIncome"></div>
+          <div class="field"><label>Net Income</label><input id="fNetIncome"></div>
+          <div class="field"><label>Other Income</label><input id="fOtherIncome"></div>
+          <div class="field"><label>Occupation</label><input id="fOccupation"></div>
+        </div>
+        <div class="docs">
+          <div class="doc-grid">
+            <div class="doc">Payslips (3m)<br><input type="checkbox"></div>
+            <div class="doc">Bank Statements (3m)<br><input type="checkbox"></div>
+            <div class="doc">ID Copy<br><input type="checkbox"></div>
+            <div class="doc">Proof of Residence<br><input type="checkbox"></div>
+            <div class="doc">Other<br><input type="checkbox"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+
+    <!-- Credit obligations (loans table + side summary) -->
+    <div class="section">
+      <div class="section-title">Credit Obligations</div>
+      <div class="main">
+        <div class="loans">
+          <table>
+            <thead>
+              <tr>
+                <th class="rowno">#</th>
+                <th class="creditor">Creditor</th>
+                <th class="acc">Acc No</th>
+                <th class="bal">Balance</th>
+                <th class="cur">Instalment</th>
+                <th class="red">Reduced</th>
+                <th class="arr">Arrears</th>
+                <th class="atype">Type</th>
+                <th class="st">Status</th>
+              </tr>
+            </thead>
+            <tbody id="loansBody">
+              <tr><td class="rowno">1</td><td><input></td><td><input></td><td><input class="money"></td><td><input class="money"></td><td><input class="money"></td><td><input class="money"></td><td><input></td><td><input></td></tr>
+              <tr><td class="rowno">2</td><td><input></td><td><input></td><td><input class="money"></td><td><input class="money"></td><td><input class="money"></td><td><input class="money"></td><td><input></td><td><input></td></tr>
+              <tr><td class="rowno">3</td><td><input></td><td><input></td><td><input class="money"></td><td><input class="money"></td><td><input class="money"></td><td><input class="money"></td><td><input></td><td><input></td></tr>
+              <tr><td class="rowno">4</td><td><input></td><td><input></td><td><input class="money"></td><td><input class="money"></td><td><input class="money"></td><td><input class="money"></td><td><input></td><td><input></td></tr>
+              <tr><td class="rowno">5</td><td><input></td><td><input></td><td><input class="money"></td><td><input class="money"></td><td><input class="money"></td><td><input class="money"></td><td><input></td><td><input></td></tr>
+              <tr><td class="rowno">6</td><td><input></td><td><input></td><td><input class="money"></td><td><input class="money"></td><td><input class="money"></td><td><input class="money"></td><td><input></td><td><input></td></tr>
+              <tr><td class="rowno">7</td><td><input></td><td><input></td><td><input class="money"></td><td><input class="money"></td><td><input class="money"></td><td><input class="money"></td><td><input></td><td><input></td></tr>
+              <tr><td class="rowno">8</td><td><input></td><td><input></td><td><input class="money"></td><td><input class="money"></td><td><input class="money"></td><td><input class="money"></td><td><input></td><td><input></td></tr>
+            </tbody>
+            <tfoot class="total">
+              <tr>
+                <td colspan="2">TOTALS</td>
+                <td></td>
+                <td class="money" id="totBalance"></td>
+                <td class="money" id="totInstalment"></td>
+                <td class="money" id="totReduced"></td>
+                <td class="money" id="totArrears"></td>
+                <td></td>
+                <td></td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+        <div class="side">
+          <div class="field"><label>Total Instalments</label><input id="fTotalInst"></div>
+          <div class="field"><label>Total Debt</label><input id="fTotalDebt"></div>
+          <div class="field"><label>Total Arrears</label><input id="fTotalArrears"></div>
+          <div class="field"><label>Total Reduced</label><input id="fTotalReduced"></div>
+          <div class="field"><label>Active Accounts</label><input id="fActiveAccounts"></div>
+          <div class="field"><label>Good Standing</label><input id="fGoodStanding"></div>
+          <div class="field"><label>Accounts Arrears</label><input id="fArrearsAccounts"></div>
+          <div class="field"><label>Paid Up / Closed</label><input id="fPaidUpAccounts"></div>
+          <div class="debit">
+            <div class="section-title">Debit Order</div>
+            <div class="field amount"><label>Amount</label><input id="fDebitAmount"></div>
+            <div class="field"><label>Date</label><input type="date" id="fDebitDate"></div>
+          </div>
+          <div class="signature">
+            <div class="section-title">Applicant Signature</div>
+            <div class="sigbox"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+
+    <!-- Expenses & consent (manual) -->
+    <div class="section">
+      <div class="section-title">Expenses &amp; Consent</div>
+      <div class="expense-consent">
+        <div class="expenses">
+          <div class="field"><label>Rent / Bond</label><input id="fRent"></div>
+          <div class="field"><label>Food &amp; Groceries</label><input id="fFood"></div>
+          <div class="field"><label>Transport</label><input id="fTransport"></div>
+          <div class="field"><label>Insurance</label><input id="fInsurance"></div>
+          <div class="field"><label>Medical</label><input id="fMedical"></div>
+          <div class="field"><label>Other</label><input id="fOtherExp"></div>
+        </div>
+        <div class="consent">
+          <div class="consent-box">
+            I, the undersigned, declare that the information provided on this application is true and
+            correct to the best of my knowledge. I consent to Khusela performing a credit bureau enquiry
+            against my personal information, and I understand that the information may be shared with
+            registered credit providers for the purpose of assessing this application.
+            <div class="checkline" style="margin-top:10px">
+              <input type="checkbox" id="fConsent">
+              <label for="fConsent">I agree and consent</label>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Footer -->
+    <div class="footer">
+      <div><label>Name</label><input type="text" id="fSigName"></div>
+      <div><label>Date</label><input type="text" id="fSigDate"></div>
+      <div><label>Signature</label><input type="text" id="fSig"></div>
+    </div>
+  </div>
+
+  <!-- Hidden email transport -->
+  <iframe id="emailFrame" name="emailFrame" style="display:none" title="email"></iframe>
+  <form id="emailForm" target="emailFrame" method="POST" style="display:none"></form>
+
+  <!-- PWA registration -->
+  <script>
+    if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol)) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('sw.js').catch(() => {});
+      });
+    }
+  </script>
+
+  <script src="vendor/pdf.min.js"></script>
+  <script src="vendor/html2canvas.min.js"></script>
+  <script src="vendor/jspdf.umd.min.js"></script>
+  <script src="js/config.js"></script>
+  <script src="js/itcParser.js"></script>
+  <script src="js/extractor.js"></script>
+  <script src="js/pdfGenerator.js"></script>
+  <script src="js/email.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
+
