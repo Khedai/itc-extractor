@@ -15,10 +15,11 @@
 //    address. We set the applicant's address via "_replyto" / an "email" field
 //    so replying to the notification goes straight back to the applicant.
 //
-// Transport: we POST multipart/form-data to FormSubmit's AJAX endpoint
-// (https://formsubmit.co/ajax/…) with fetch(). It accepts the PDF attachment,
-// works cross-origin (including on phones) and returns a real JSON response —
-// unlike a hidden-iframe form POST whose onload is unreliable on mobile.
+// Transport: we POST multipart/form-data to FormSubmit's STANDARD endpoint
+// (https://formsubmit.co/…) with fetch(). The standard endpoint is the one that
+// accepts file uploads — the /ajax/ endpoint silently drops attachments — and
+// it sends CORS headers, so the browser can deliver the PDF and read the
+// response page (which also reports an un-activated form). No hidden iframe.
 (function () {
   'use strict';
 
@@ -80,44 +81,43 @@
       if (applicant.id) fd.append('ID Number', applicant.id);
       if (applicant.date) fd.append('Date', applicant.date);
 
-      // Attach the generated PDF — field MUST be named "attachment" for FormSubmit.
+      // Attach the generated PDF — the field MUST be named "attachment". This is
+      // posted to the STANDARD endpoint (the one FormSubmit documents for file
+      // uploads); the /ajax/ endpoint silently drops attachments. The standard
+      // endpoint sends CORS headers, so a normal fetch delivers the file and
+      // lets us read the response page back.
       fd.append('attachment', blob, filename);
 
       const controller = new AbortController();
       const timer = setTimeout(() => controller.abort(), SEND_TIMEOUT_MS);
 
-      fetch('https://formsubmit.co/ajax/' + encodeURIComponent(cfg.recipientEmail), {
+      fetch('https://formsubmit.co/' + encodeURIComponent(cfg.recipientEmail), {
         method: 'POST',
         body: fd,
         signal: controller.signal,
       })
         .then(async (res) => {
           clearTimeout(timer);
-          let data = null;
-          try { data = await res.json(); } catch (e) { data = null; }
+          let text = '';
+          try { text = await res.text(); } catch (e) { text = ''; }
 
-          if (res.ok && data && String(data.success) === 'true') {
-            resolve({ ok: true, msg: 'Email sent to ' + cfg.recipientEmail + '. The filled form is attached as a PDF.' });
-            return;
+          if (res.status !== 200) {
+            return resolve({ ok: false, reason: 'refused', msg: 'The email service refused the submission (HTTP ' + res.status + '). Nothing was sent; your draft is still saved in this browser.' });
           }
 
-          // FormSubmit answered but refused the submission — the most common
-          // cause is the recipient not having clicked the one-time activation
-          // link yet.
-          const text = (data && data.message)
-            ? data.message
-            : ('The email service refused the submission (HTTP ' + res.status + ').');
-          if (/activat/i.test(text)) {
-            resolve({ ok: false, reason: 'activation', msg: 'The email service sent the recipient a one-time activation notification — the PDF is only delivered after they click its activation link. Click it, then press Submit & Email again. Your draft is still saved.' });
-            return;
+          // FormSubmit's response page tells us when the recipient hasn't
+          // clicked the one-time activation link yet ("This form needs
+          // Activation."). Until then the PDF is not delivered.
+          if (/this form needs activ|activate form|activation link/i.test(text)) {
+            return resolve({ ok: false, reason: 'activation', msg: 'The email service sent the recipient a one-time activation notification — the PDF is only delivered after they click its activation link. Click it, then press Submit & Email again. Your draft is still saved.' });
           }
-          resolve({ ok: false, reason: 'refused', msg: text + ' Nothing was sent; your draft is still saved in this browser.' });
+
+          resolve({ ok: true, msg: 'Email sent to ' + cfg.recipientEmail + '. The filled form is attached as a PDF.' });
         })
         .catch((err) => {
           clearTimeout(timer);
           if (err && err.name === 'AbortError') {
-            resolve({ ok: false, reason: 'timeout', msg: 'Timed out contacting the email service — the PDF is large and mobile uploads can be slow. Nothing was sent; your draft is still saved in this browser. Try again.' });
-            return;
+            return resolve({ ok: false, reason: 'timeout', msg: 'Timed out contacting the email service — the PDF is large and mobile uploads can be slow. Nothing was confirmed sent; your draft is still saved. Try again if the email does not arrive.' });
           }
           resolve({ ok: false, reason: 'network', msg: 'Could not contact the email service (' + (err && err.message ? err.message : 'network error') + '). Nothing was sent — your draft is still saved in this browser. Check your connection and try again.' });
         });
