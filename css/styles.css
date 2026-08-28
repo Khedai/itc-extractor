@@ -6,8 +6,11 @@
   --red:#c21f2f;
 }
 *{box-sizing:border-box}
+html,body{overflow-x:hidden}
 body{margin:0;background:#eef1f5;font-family:Arial,Helvetica,sans-serif;color:#111;font-size:13px}
+img{max-width:100%}
 .toolbar{position:sticky;top:0;z-index:50;background:#fff;border-bottom:1px solid #bbb;padding:8px 12px;display:flex;gap:8px;justify-content:center;flex-wrap:wrap}
+.toolbar .btn{flex:1 1 auto;min-width:0;white-space:nowrap}
 .draft-note{background:#fff8e1;border-bottom:1px solid #e2d6a0;color:#6b5b00;text-align:center;padding:4px 12px;font-size:12px;font-weight:bold}
 button{border:0;padding:8px 14px;border-radius:3px;font-weight:bold;cursor:pointer}
 .btn{background:var(--navy);color:#fff} .btn.secondary{background:#666} .btn.red{background:var(--red)}
@@ -18,7 +21,7 @@ button{border:0;padding:8px 14px;border-radius:3px;font-weight:bold;cursor:point
 .top-left{min-width:0}
 .top-mid{justify-content:center}
 .top-right{justify-content:flex-end}
-.logo{height:72px;width:auto;max-width:430px;object-fit:contain;flex:0 1 auto}
+.logo{height:72px;width:auto;max-width:min(430px,100%);object-fit:contain;flex:0 1 auto}
 .title{font-size:29px;font-weight:800;letter-spacing:1px;color:var(--navy);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 label{font-weight:bold}
 input,select,textarea{font:inherit;border:1px solid #9da8b6;background:#fff;padding:5px;height:28px;width:100%;min-width:0}
@@ -75,7 +78,7 @@ td input,td select{border:0;height:25px;padding:3px}
 .checkline label{font-weight:normal}
 @media(max-width:1300px){
 .title{font-size:22px}
-.logo{max-width:300px}
+.logo{max-width:min(300px,100%)}
 }
 @media(max-width:1000px){
 .top{grid-template-columns:1fr}
@@ -83,6 +86,30 @@ td input,td select{border:0;height:25px;padding:3px}
 .personal,.details,.income-docs,.main,.expense-consent{grid-template-columns:1fr}
 .docs{grid-column:auto}
 .income,.loans{border-right:0}
+}
+@media(max-width:700px){
+/* The 9-column loans table scrolls horizontally instead of squishing on phones. */
+.loans{overflow-x:auto;-webkit-overflow-scrolling:touch}
+.loans table{min-width:640px}
+}
+@media(max-width:480px){
+/* Stack the toolbar so the buttons can never be cut off; bigger touch targets. */
+.toolbar{flex-direction:column}
+.toolbar .btn{width:100%;min-height:44px;font-size:15px}
+.top{padding:6px}
+.logo{height:52px}
+.title{font-size:19px}
+/* Form fields: label above input instead of beside it. */
+.field,.field.short,.side .field,.income .field,.expenses .field{grid-template-columns:1fr;gap:2px}
+.field label{font-size:12px}
+.app-type{flex-direction:column;align-items:stretch}
+.app-type select{width:100%}
+.footer{flex-direction:column;gap:8px;align-items:stretch}
+.footer div{display:flex;align-items:center;gap:6px}
+.footer input[type=text]{width:100%}
+.details>div,.col{border-right:0}
+.itc-grid .btn{height:40px;width:100%}
+.page{margin:6px auto}
 }
 @media print{
 .toolbar,.draft-note,.itc-panel,.result-panel{display:none} body{background:#fff} .page{width:100%;margin:0;box-shadow:none}
