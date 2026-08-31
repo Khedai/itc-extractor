@@ -21,7 +21,6 @@
     home: 'fHomeTel', work: 'fWorkTel', cell: 'fCell', email: 'fEmail',
     residential: 'fResidential', postal: 'fPostal', employer: 'fEmployer',
     marital: 'fMarital',
-    totalInst: 'fTotalInst', totalDebt: 'fTotalDebt', totalArrears: 'fTotalArrears',
     activeAccounts: 'fActiveAccounts', goodStandingAccounts: 'fGoodStanding',
     arrearsAccounts: 'fArrearsAccounts', paidUpAccounts: 'fPaidUpAccounts',
   };
@@ -137,10 +136,10 @@
       const inputs = rows[i].querySelectorAll('input');
       const vals = [
         a.sub, a.acct,
-        a.balance != null ? za(a.balance) : '',
-        a.instalment != null ? za(a.instalment) : '',
-        a.reduced != null ? za(a.reduced) : '',
-        a.arrears != null ? za(a.arrears) : '',
+        a.balance != null ? money(a.balance) : '',
+        a.instalment != null ? money(a.instalment) : '',
+        a.reduced != null ? money(a.reduced) : '',
+        a.arrears != null ? money(a.arrears) : '',
         a.type, a.status,
       ];
       inputs.forEach((inp, j) => {
@@ -154,8 +153,15 @@
     $('totInstalment').textContent = money(sum('instalment'));
     $('totReduced').textContent = money(sum('reduced'));
     $('totArrears').textContent = money(sum('arrears'));
-    setField('fTotalReduced', za(sum('reduced')));
-    setField('fReducedAmount', '');
+
+    setField('fTotalInst', d.totalInst ? money(d.totalInst) : (sum('instalment') ? money(sum('instalment')) : ''));
+    setField('fTotalDebt', d.totalDebt ? money(d.totalDebt) : (sum('balance') ? money(sum('balance')) : ''));
+    setField('fTotalArrears', d.totalArrears ? money(d.totalArrears) : (sum('arrears') ? money(sum('arrears')) : ''));
+    setField('fTotalReduced', money(sum('reduced')));
+
+    // Debit Order: Reduced Amount is the total of reduced column in Rands; Amount stays empty until manually filled
+    setField('fReducedAmount', money(sum('reduced')));
+    setField('fDebitAmount', '');
 
     if (!$('fDate').value) $('fDate').value = new Date().toISOString().split('T')[0];
 

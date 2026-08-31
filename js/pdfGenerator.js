@@ -136,34 +136,37 @@
       const mmPerPx = pageW / imgW;              // one canvas pixel, in mm
       const pageHeightPx = pageH / mmPerPx;      // one A4 page tall, in canvas px
 
-      // Safe page-break lines, measured from the rendered canvas itself so they
-      // are pixel-accurate on every device (see detectBreakLines).
-      let breakPoints = detectBreakLines(canvas, imgH);
-      // Fallback (should never be needed): section tops measured from the DOM.
-      if (breakPoints.length === 0) {
-        const rect = clone.getBoundingClientRect();
-        const tops = [];
-        clone.querySelectorAll('.section, .section-title, .footer').forEach((b) => {
-          const y = b.getBoundingClientRect().top - rect.top;
-          if (y > 1 && y < imgH) tops.push(y);
-        });
-        tops.sort((a, b) => a - b);
-        const mapped = tops.map((y) => y * scale - 2).filter((y) => y > 1 && y < imgH);
-        breakPoints = mapped.filter((y, i) => i === 0 || y - mapped[i - 1] > 2);
+      // If the rendered form fits comfortably on one A4 page (within a slight margin),
+      // render it directly as a clean single-page PDF with no page splits.
+      if (imgH <= pageHeightPx * 1.08) {
+        const renderH = Math.min(pageH, (imgH / imgW) * pageW);
+        pdf.addImage(img, 'JPEG', 0, 0, pageW, renderH);
+        return pdf.output('blob');
       }
+
+      // If the form spans multiple pages, gather section-level safe break points
+      // from the DOM rects so a page NEVER slices through a section, table or signature.
+      const rect = clone.getBoundingClientRect();
+      const sectionTops = [];
+      clone.querySelectorAll('.section, .footer').forEach((el) => {
+        const y = (el.getBoundingClientRect().top - rect.top) * scale;
+        if (y > 10 && y < imgH - 10) sectionTops.push(Math.round(y));
+      });
+      sectionTops.sort((a, b) => a - b);
 
       let cursor = 0;
       let pageNo = 0;
-      while (cursor < imgH - 0.5) {
+      while (cursor < imgH - 1) {
         let cut = Math.min(cursor + pageHeightPx, imgH);
         if (cut < imgH) {
-          // Snap the break to the nearest candidate before the A4 page end.
+          // Snap the cut to the last section top before the page boundary
           let snapped = null;
-          for (const y of breakPoints) {
-            if (y > cursor + 0.5 && y <= cut) snapped = y;
+          for (const y of sectionTops) {
+            if (y > cursor + 50 && y <= cut) snapped = y;
           }
           if (snapped !== null) cut = snapped;
         }
+
         if (pageNo > 0) pdf.addPage();
         pdf.addImage(img, 'JPEG', 0, -cursor * mmPerPx, pageW, imgH * mmPerPx);
         cursor = cut;
