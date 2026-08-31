@@ -38,6 +38,17 @@
   <!-- Result feedback (email / status) -->
   <div class="result-panel" id="resultPanel"></div>
 
+  <!-- Sending overlay — shown while the PDF is rendered/compressed and emailed -->
+  <div class="send-overlay" id="sendOverlay" aria-hidden="true" role="dialog" aria-modal="true" aria-label="Preparing and sending your email">
+    <div class="send-box">
+      <div class="spinner" aria-hidden="true"></div>
+      <div class="send-title" id="sendTitle">Preparing your PDF…</div>
+      <div class="send-sub" id="sendSub">Rendering the application form</div>
+      <div class="send-track" aria-hidden="true"><div class="send-bar"></div></div>
+      <div class="send-hint" id="sendHint"></div>
+    </div>
+  </div>
+
   <!-- The application form -->
   <div class="page" id="formPage">
     <div class="top">
@@ -202,6 +213,7 @@
           <div class="field"><label>Paid Up / Closed</label><input id="fPaidUpAccounts"></div>
           <div class="debit">
             <div class="section-title">Debit Order</div>
+            <div class="field"><label>Reduced Amount</label><input id="fReducedAmount"></div>
             <div class="field amount"><label>Amount</label><input id="fDebitAmount"></div>
             <div class="field"><label>Date</label><input type="date" id="fDebitDate"></div>
           </div>

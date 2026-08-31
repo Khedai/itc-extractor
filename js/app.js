@@ -41,6 +41,40 @@
     el.textContent = text;
   }
 
+  // ── Sending overlay (PDF prep + email send) ──────────────────────────────
+  // The email upload can take up to a minute on slow connections; the overlay
+  // keeps the user informed instead of leaving them staring at a greyed button.
+  const SEND_TIPS = [
+    'This can take up to a minute on slower connections — keep this page open.',
+    'Your draft is saved on this device. If anything fails you can simply press Submit & Email again.',
+    'The recipient receives the completed form as a PDF attachment.',
+  ];
+  let sendTipTimer = null;
+
+  function showSending(title, sub, hint) {
+    $('sendTitle').textContent = title;
+    $('sendSub').textContent = sub || '';
+    $('sendHint').textContent = hint || '';
+    $('sendOverlay').classList.add('show');
+    $('sendOverlay').setAttribute('aria-hidden', 'false');
+  }
+
+  function startSendTips() {
+    clearInterval(sendTipTimer);
+    let i = 0;
+    sendTipTimer = setInterval(() => {
+      i = (i + 1) % SEND_TIPS.length;
+      $('sendHint').textContent = SEND_TIPS[i];
+    }, 4500);
+  }
+
+  function hideSending() {
+    clearInterval(sendTipTimer);
+    sendTipTimer = null;
+    $('sendOverlay').classList.remove('show');
+    $('sendOverlay').setAttribute('aria-hidden', 'true');
+  }
+
   function setField(id, value) {
     const el = $(id);
     if (!el) return;
@@ -121,6 +155,7 @@
     $('totReduced').textContent = money(sum('reduced'));
     $('totArrears').textContent = money(sum('arrears'));
     setField('fTotalReduced', za(sum('reduced')));
+    setField('fReducedAmount', '');
 
     if (!$('fDate').value) $('fDate').value = new Date().toISOString().split('T')[0];
 
@@ -168,6 +203,7 @@
     const btn = $('btnSubmit');
     btn.disabled = true;
     btn.textContent = 'Preparing PDF…';
+    showSending('Preparing your PDF…', 'Rendering the application form');
     try {
       let blob = await generatePdf();
 
@@ -176,8 +212,10 @@
       // failing — a credit-application form still reads fine at that size.
       if (blob.size > MAX_ATTACH_BYTES) {
         btn.textContent = 'Compressing PDF…';
+        showSending('Compressing your PDF…', 'Shrinking the file so it fits the email attachment limit');
         blob = await generatePdf({ scale: 1.4, quality: 0.65 });
         if (blob.size > MAX_ATTACH_BYTES) {
+          hideSending();
           showResult(false, 'The PDF is ' + (blob.size / 1048576).toFixed(1) + ' MB — over the email service\'s 10 MB limit. Nothing was sent; your draft is still saved in this browser.');
           return;
         }
@@ -185,9 +223,13 @@
 
       const filename = makeFilename();
       btn.textContent = 'Sending email…';
+      showSending('Sending your email…', 'Uploading the PDF to the email service', SEND_TIPS[0]);
+      startSendTips();
       const res = await window.ITCEmail.send(blob, filename, CONFIG);
+      hideSending();
       showResult(res.ok, res.msg);
     } catch (e) {
+      hideSending();
       showResult(false, 'Failed to generate the PDF: ' + (e && e.message ? e.message : e));
     } finally {
       btn.disabled = false;

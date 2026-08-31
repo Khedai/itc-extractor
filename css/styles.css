@@ -135,3 +135,19 @@ td input,td select{border:0;height:25px;padding:3px}
 .result-panel.ok{border-color:#5b9b72;color:#145c2e}
 .result-panel.err{border-color:#c66;background:#fff0f0;color:#8a1111}
 .itc-grid .btn{height:30px;display:inline-flex;align-items:center}
+
+/* ── Sending overlay (PDF prep + email send) ──────────────── */
+.send-overlay{position:fixed;inset:0;z-index:1000;background:rgba(16,42,92,.45);display:flex;align-items:center;justify-content:center;opacity:0;pointer-events:none;transition:opacity .18s ease}
+.send-overlay.show{opacity:1;pointer-events:auto}
+.send-box{background:#fff;border-radius:10px;box-shadow:0 12px 40px rgba(0,0,0,.35);padding:30px 36px;text-align:center;max-width:360px;width:calc(100% - 40px)}
+.spinner{width:54px;height:54px;margin:0 auto 16px;border:5px solid #dbe4f0;border-top-color:var(--navy);border-radius:50%;animation:spin .85s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.send-title{font-size:17px;font-weight:800;color:var(--navy)}
+.send-sub{font-size:13px;color:#555;margin-top:7px;min-height:36px}
+.send-track{height:6px;border-radius:3px;background:#e3e9f2;margin-top:16px;overflow:hidden}
+.send-bar{height:100%;width:32%;border-radius:3px;background:linear-gradient(90deg,var(--blue),#4a7bd0);animation:slide 1.3s ease-in-out infinite}
+@keyframes slide{0%{transform:translateX(-120%)}100%{transform:translateX(420%)}}
+.send-hint{font-size:12px;color:#888;margin-top:12px;min-height:16px}
+@media(max-width:480px){
+  .send-box{padding:24px 20px}
+}

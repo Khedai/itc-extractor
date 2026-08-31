@@ -1,60 +1,83 @@
 // PDF generation — renders the application form to a multi-page A4 landscape
 // PDF (matching the wide desktop layout) using html2canvas + jsPDF, then
 // returns the PDF as a Blob. Page breaks are detected from the rendered canvas
-// itself (uniform divider lines / blank gutters), so a page never cuts through
-// a word or a table cell, on any device.
+// itself and only ever fall on full-width divider rules, so a page never cuts
+// through a word, a section or a table row, on any device.
 (function () {
   'use strict';
 
-  // Find horizontal "clean" rows in the rendered canvas — section divider
-  // lines, table rules and blank gutters. Cutting on one of these is guaranteed
-  // never to slice through a word or a table cell. Because they are measured
-  // from the canvas itself they are pixel-accurate on every device (DOM rects
-  // are NOT reliable: the clone on a phone is laid out with the mobile media
-  // queries, while html2canvas renders the desktop layout).
+  // Find horizontal "safe" rows in the rendered canvas. A cut is safe only when
+  // it lands on a full-width horizontal RULE (a thin dark line spanning nearly
+  // the whole page): section dividers, the navy rule under the header, grid
+  // borders. Table content never qualifies — the loans table's row borders cover
+  // only ~70% of the width and its inputs are borderless white boxes, so a cut
+  // can never slice through a table row. Previously the page ending could land
+  // in the middle of the credit obligations table (rows ~6-7 were clipped); the
+  // algorithm below guarantees cuts only ever occur on such rules.
+  //
+  // Because the lines are measured from the canvas itself they are pixel-accurate
+  // on every device (html2canvas always lays the form out at the desktop width,
+  // so the canvas is the single source of truth — DOM rects are NOT: the page's
+  // own media queries put the clone in the mobile layout on phones).
   function detectBreakLines(canvas, imgH) {
-    const sample = 0.5; // scan at half resolution, then scale back up
-    const sw = Math.max(1, Math.round(canvas.width * sample));
-    const sh = Math.max(1, Math.round(canvas.height * sample));
-    const small = document.createElement('canvas');
-    small.width = sw;
-    small.height = sh;
-    const sctx = small.getContext('2d');
-    sctx.drawImage(canvas, 0, 0, sw, sh);
-    const data = sctx.getImageData(0, 0, sw, sh).data;
-    const x0 = Math.floor(sw * 0.05);
-    const x1 = sw - Math.floor(sw * 0.05);
-    const clean = [];
-    for (let y = 0; y < sh; y++) {
-      let sum = 0;
-      let sumSq = 0;
-      let n = 0;
-      for (let x = x0; x < x1; x += 2) {
-        const o = (y * sw + x) * 4;
+    const step = 2;                      // sample every 2nd pixel
+    const x0 = Math.floor(canvas.width * 0.05);
+    const x1 = canvas.width - Math.floor(canvas.width * 0.05);
+    const samples = Math.ceil((x1 - x0) / step);
+    const minDark = samples * 0.85;      // ≥85% of the scanned width must be dark
+
+    const ctx = canvas.getContext('2d');
+    const data = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
+
+    // 1) Rows that are "mostly a line" (a rule across the width).
+    const lineRows = [];
+    for (let y = 0; y < canvas.height; y++) {
+      let dark = 0;
+      const base = y * canvas.width;
+      for (let x = x0; x < x1; x += step) {
+        const o = (base + x) * 4;
         const lum = 0.299 * data[o] + 0.587 * data[o + 1] + 0.114 * data[o + 2];
-        sum += lum;
-        sumSq += lum * lum;
-        n++;
+        if (lum < 230) dark++;
       }
-      const mean = sum / n;
-      if (sumSq / n - mean * mean < 100) clean.push(y); // uniform row (std dev < 10)
+      if (dark >= minDark) lineRows.push(y);
     }
-    // Group adjacent clean rows into single lines.
-    const lines = [];
-    let start = null;
-    let prev = null;
-    for (const y of clean) {
+
+    // 2) Group adjacent line rows into bands (a rule may be 1-4 px tall).
+    const bands = [];
+    let start = null, prev = null;
+    for (const y of lineRows) {
       if (start === null) { start = y; prev = y; continue; }
-      if (y - prev > 3) { lines.push((start + prev) / 2); start = y; }
+      if (y - prev > 4) { bands.push(Math.round((start + prev) / 2)); start = y; }
       prev = y;
     }
-    if (start !== null) lines.push((start + prev) / 2);
-    // Convert back to full-resolution pixels, cutting 2px below the line's top:
-    // the boundary then falls exactly between the divider line and the content
-    // that follows, so nothing is ever sliced.
-    return lines
-      .map((y) => Math.round(y / sample + 2))
-      .filter((y) => y > 1 && y < imgH - 2);
+    if (start !== null) bands.push(Math.round((start + prev) / 2));
+
+    // 3) Keep only ISOLATED thin rules. The navy table-header row is a ~50 px
+    //    solid band, not a divider — its edges are rejected because dark rows
+    //    continue on one side. A real divider has light rows above AND below.
+    const isDarkRow = (y) => {
+      if (y < 0 || y >= canvas.height) return false;
+      let dark = 0, n = 0;
+      const base = y * canvas.width;
+      for (let x = x0; x < x1; x += 4) {
+        const o = (base + x) * 4;
+        const lum = 0.299 * data[o] + 0.587 * data[o + 1] + 0.114 * data[o + 2];
+        if (lum < 230) dark++;
+        n++;
+      }
+      return dark / n > 0.5;
+    };
+    const rules = bands.filter((y) => {
+      let above = 0, below = 0;
+      for (let d = 5; d <= 14; d++) {
+        if (isDarkRow(y - d)) above++;
+        if (isDarkRow(y + d)) below++;
+      }
+      return above <= 1 && below <= 1;
+    });
+
+    // Cut 3 px below each rule so the rule stays with the content above it.
+    return rules.map((y) => Math.min(y + 3, imgH - 1)).filter((y) => y > 1 && y < imgH - 2);
   }
 
   // opts: { scale, quality } — lower both to shrink the output when it would
