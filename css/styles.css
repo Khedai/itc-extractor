@@ -119,11 +119,15 @@ td input,td select{border:0;height:21px;padding:2px;font-size:11px}
 .itc-title{font-size:15px;font-weight:800;color:#102a5c;margin-bottom:6px}
 .itc-grid{display:grid;grid-template-columns:1.5fr 1fr auto;gap:8px;align-items:end}
 .itc-grid label{display:flex;flex-direction:column;gap:4px}
-.itc-grid input{height:30px}
+.itc-grid input,.itc-grid select{height:30px}
 .itc-status{margin-top:7px;padding:6px;border:1px solid #c8d0dc;background:#fff;font-weight:bold}
 .itc-status.ok{border-color:#5b9b72;background:#edf8f0;color:#145c2e}
 .itc-status.err{border-color:#c66;background:#fff0f0;color:#8a1111}
 @media(max-width:1000px){.itc-grid{grid-template-columns:1fr}}
+
+/* Tracker panel: file picker wider, sheet selector beside it (no button here —
+   the action lives in the sticky toolbar). */
+.tracker-panel .itc-grid{grid-template-columns:2fr 1fr}
 
 .tracker-note{margin:6px 10px;padding:7px 9px;border:1px solid #9aa8bd;background:#f7f9fc;color:#102a5c;font-weight:bold}.tracker-count{font-weight:normal;margin-left:8px}
 

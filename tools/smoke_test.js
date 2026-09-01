@@ -34,7 +34,7 @@ const server = http.createServer((req, res) => {
 
 server.listen(0, async () => {
   const port = server.address().port;
-  const urls = ['/', '/index.html', '/css/styles.css', '/js/app.js', '/js/itcParser.js', '/manifest.webmanifest', '/sw.js', '/vendor/pdf.min.js', '/vendor/pdf.worker.min.js', '/vendor/html2canvas.min.js', '/vendor/jspdf.umd.min.js', '/logo.png', '/icons/icon-192.png'];
+  const urls = ['/', '/index.html', '/css/styles.css', '/js/app.js', '/js/itcParser.js', '/js/tracker.js', '/manifest.webmanifest', '/sw.js', '/vendor/pdf.min.js', '/vendor/pdf.worker.min.js', '/vendor/html2canvas.min.js', '/vendor/jspdf.umd.min.js', '/vendor/xlsx.full.min.js', '/logo.png', '/icons/icon-192.png'];
   let bad = 0;
   for (const u of urls) {
     const code = await new Promise((resolve) => {

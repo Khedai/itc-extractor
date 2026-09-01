@@ -16,6 +16,7 @@
   <!-- Toolbar -->
   <div class="toolbar">
     <button class="btn secondary" id="btnReset">Reset Form</button>
+    <button class="btn secondary" id="btnTracker">Submit to Tracker</button>
     <button class="btn red" id="btnSubmit">Submit &amp; Email</button>
   </div>
   <div class="draft-note">Drafts are autosaved on this device only &mdash; never uploaded, never downloadable.</div>
@@ -34,6 +35,21 @@
     </div>
     <div class="itc-status" id="itcStatus">No report loaded yet. Upload a Datanamix ITC PDF and click <b>Extract &amp; Fill Form</b>.</div>
   </div>
+
+  <!-- Tracker export -->
+  <div class="itc-panel tracker-panel" id="trackerPanel">
+    <div class="itc-title">Submit to Tracker</div>
+    <div class="itc-grid">
+      <label>Tracker Excel File
+        <input type="file" id="trackerFile" accept=".xlsx,.xls,.csv,.ods">
+      </label>
+      <label>Sheet
+        <select id="trackerSheet"></select>
+      </label>
+    </div>
+    <div class="itc-status" id="trackerStatus">Select your tracker Excel file (and sheet to append to), then press <b>Submit to Tracker</b>. Headers are matched by name &mdash; fields with no matching column are skipped; an empty sheet gets its columns created. The amount always carries an <b>R</b> (Rand).</div>
+  </div>
+
 
   <!-- Result feedback (email / status) -->
   <div class="result-panel" id="resultPanel"></div>
@@ -277,11 +293,13 @@
   <script src="vendor/pdf.min.js"></script>
   <script src="vendor/html2canvas.min.js"></script>
   <script src="vendor/jspdf.umd.min.js"></script>
+  <script src="vendor/xlsx.full.min.js"></script>
   <script src="js/config.js"></script>
   <script src="js/itcParser.js"></script>
   <script src="js/extractor.js"></script>
   <script src="js/pdfGenerator.js"></script>
   <script src="js/email.js"></script>
+  <script src="js/tracker.js"></script>
   <script src="js/app.js"></script>
 </body>
 </html>

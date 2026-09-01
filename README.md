@@ -6,8 +6,10 @@ A standalone, installable web app that:
 2. **Extracts a Datanamix ITC PDF** (including password-protected reports) and
    **fills the form automatically** — auto-filled fields are highlighted green.
 3. **Formats the filled form as a PDF** and **emails it** when **Submit & Email**
-   is pressed. The app has **no download feature** and **no server-side storage** —
-   drafts are autosaved to the device's browser only.
+   is pressed. Drafts are autosaved to the device's browser only.
+4. **Appends the application to your tracker spreadsheet** when **Submit to
+   Tracker** is pressed — columns are matched by header, missing columns are
+   skipped, and an empty tracker gets its columns created (see below).
 
 All libraries are vendored locally (`vendor/`) so the app works fully offline.
 
@@ -36,7 +38,48 @@ Then open <http://localhost:8080>.
    **Extract & Fill Form**.
 2. **Complete** — fill the manual fields (income, expenses, docs, signatures).
 3. **Submit** — click **Submit & Email**. The form is rendered to a multi-page
-   A4 PDF and sent to the configured address. Nothing is downloaded.
+   A4 PDF and sent to the configured address.
+4. **Track** — select your tracker spreadsheet (Excel, CSV or ODS) in the
+   **Submit to Tracker** panel, pick the sheet, and press **Submit to Tracker**.
+   The application is appended to the bottom of that sheet and the updated file
+   is saved back (native save dialog on Chrome/Edge, a download elsewhere).
+
+## Submit to Tracker
+
+The tracker panel (below the ITC panel) turns the current application into one
+new row at the **bottom of the sheet you select**. Everything runs in the
+browser — the file is read locally, extended, and saved back; nothing is
+uploaded.
+
+- **Matched columns** — the sheet's header row is matched against the field
+  names *Name, Surname, ID Number, Account Number, Phone Number, Title* and
+  *Amount*. Common variants count too (`First Name`, `Last Name`, `ID No`,
+  `Acc No`, `Cell`, `Mobile`, …).
+- **No column, no value** — if the sheet has no matching column (for example no
+  *Title*), that field is simply skipped; the app never invents columns for an
+  existing tracker.
+- **Empty tracker** — a brand-new / empty sheet gets all columns created first,
+  then the row.
+- **R amount** — the amount column always carries an **R** (Rand): `R 5000`, or
+  a bare `R` when no amount is filled in.
+
+Where each value comes from on the form:
+
+| Tracker field      | Form field                                        |
+| ------------------ | ------------------------------------------------- |
+| Name               | First Name + Second Name                          |
+| Surname            | Surname                                           |
+| ID Number          | ID Number                                         |
+| Account Number     | Client Ref → Ref → first loan's Acc No (fallback) |
+| Phone Number       | Cellular No → Home Tel → Work Tel (fallback)      |
+| Title              | Title                                             |
+| Amount             | Debit Amount → Reduced Amount (fallback), `R`-prefixed |
+
+> **Note on saving** — a website cannot overwrite a file on your disk without
+> asking. Chrome/Edge show a "save as" dialog pre-filled with the tracker's own
+> name so you can save over it; other browsers download the updated file and you
+> save it over your tracker manually.
+
 
 ## Where are drafts saved?
 
@@ -46,8 +89,9 @@ using** — they never leave that device:
 - **Not uploaded** — no network request ever carries the form data (except the
   PDF itself when you press **Submit & Email**).
 - **Not stored on any server** — there is no backend and no database.
-- **Not downloadable** — the app has no download button and never triggers a
-  download; the toolbar only has **Reset Form** and **Submit & Email**.
+- **Not downloadable as a draft** — the form itself is never offered as a
+  download; the toolbar's only file output is the tracker spreadsheet you choose
+  to save when you press **Submit to Tracker**.
 - **Private to the browser** — a draft only exists inside that browser profile
   on that machine. Another person using the same app cannot see it.
 - **Cleared** — **Reset Form** wipes the form and the saved draft.
