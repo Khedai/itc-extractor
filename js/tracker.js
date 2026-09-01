@@ -235,43 +235,7 @@
   }
 
 
-  async function saveFile(blob, fileName) {
-    // 1) In-place write through the stored file handle (Chrome / Edge). This is
-    //    the important path: it overwrites the exact file the user opened — no
-    //    save-as dialog, so the tracker on disk really changes.
-    if (currentHandle) {
-      try {
-        const writable = await currentHandle.createWritable();
-        await writable.write(blob);
-        await writable.close();
-        return { via: 'handle', name: currentHandle.name };
-      } catch (e) {
-        // Permission denied or the file is locked (e.g. open in Excel) — fall
-        // through to a save-as dialog / download rather than losing the row.
-      }
-    }
-    // 2) Save-as dialog (Chrome / Edge without a stored handle).
-    if (window.showSaveFilePicker) {
-      try {
-        const ext = extensionOf(fileName);
-        const accept = {};
-        accept[mimeFor(fileName)] = ['.' + ext];
-        const handle = await window.showSaveFilePicker({
-          suggestedName: fileName,
-          types: [{ description: 'Spreadsheet', accept: accept }],
-        });
-        const writable = await handle.createWritable();
-        await writable.write(blob);
-        await writable.close();
-        return { via: 'picker', name: handle.name };
-      } catch (e) {
-        if (e && e.name === 'AbortError') {
-          throw new Error('Save cancelled — nothing was written to the tracker. Your form data is still intact.');
-        }
-        // Any other failure — fall through to a plain download.
-      }
-    }
-    // 3) Plain download (Firefox, Android, anything else).
+  function downloadFile(blob, fileName) {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
@@ -280,7 +244,68 @@
     a.click();
     a.remove();
     setTimeout(() => URL.revokeObjectURL(url), 15000);
-    return { via: 'download', name: fileName };
+  }
+
+  async function saveFile(blob, fileName) {
+    // 1) In-place write through the stored file handle (Chrome / Edge). This is
+    //    the preferred path: it overwrites the exact file the user opened — no
+    //    save-as dialog, so the tracker on disk really changes.
+    let inPlaceFailed = false;
+    if (currentHandle) {
+      try {
+        const writable = await currentHandle.createWritable();
+        await writable.write(blob);
+        await writable.close();
+        return { via: 'handle', name: currentHandle.name };
+      } catch (e) {
+        // The in-place write failed (most often because the file is locked —
+        // e.g. open in Excel). Fall through to save-as/download so the row is
+        // never lost; the message below says why the in-place update didn't stick.
+        inPlaceFailed = true;
+      }
+    }
+
+    // 2) Save-as dialog (Chrome / Edge without a usable handle). The picker
+    //    itself and the subsequent write are handled separately so that a
+    //    genuine "Cancel" and a failed write are reported differently.
+    if (window.showSaveFilePicker) {
+      let handle;
+      try {
+        const ext = extensionOf(fileName);
+        const accept = {};
+        accept[mimeFor(fileName)] = ['.' + ext];
+        handle = await window.showSaveFilePicker({
+          suggestedName: fileName,
+          types: [{ description: 'Spreadsheet', accept: accept }],
+        });
+      } catch (e) {
+        if (e && e.name === 'AbortError') {
+          // The user closed the dialog without choosing a location.
+          throw new Error('Save cancelled — nothing was written to the tracker. Your form data is still intact.');
+        }
+        // The picker failed for another reason — download the updated file so
+        // the row is not lost.
+        downloadFile(blob, fileName);
+        return { via: 'download', name: fileName, note: 'downloaded', inPlaceFailed: inPlaceFailed };
+      }
+      // The user confirmed a location. If the actual write then fails it is
+      // almost always because the target is locked (e.g. open in Excel) — the
+      // browser reports this as AbortError, NOT as the user cancelling. Rather
+      // than dropping the row, download the updated copy and say why.
+      try {
+        const writable = await handle.createWritable();
+        await writable.write(blob);
+        await writable.close();
+        return { via: 'picker', name: handle.name, inPlaceFailed: inPlaceFailed };
+      } catch (e) {
+        downloadFile(blob, fileName);
+        return { via: 'download', name: fileName, note: 'writeFailed', inPlaceFailed: inPlaceFailed };
+      }
+    }
+
+    // 3) No File System Access API (Firefox, Android, …) → plain download.
+    downloadFile(blob, fileName);
+    return { via: 'download', name: fileName, note: 'downloaded', inPlaceFailed: inPlaceFailed };
   }
 
   // ── Tracker UI (file picker + sheet selector + submit) ───────────────────
@@ -424,11 +449,18 @@
     if (report.created.length) parts.push('created columns <b>' + report.created.join(', ') + '</b>');
     if (report.matched.length) parts.push('filled existing columns <b>' + report.matched.join(', ') + '</b>');
     if (report.skipped.length) parts.push('skipped <b>' + report.skipped.join(', ') + '</b> (no matching column)');
-    const where = save.via === 'handle'
-      ? 'The tracker file has been updated in place.'
-      : save.via === 'picker'
-        ? 'Choose where to save the updated file.'
-        : 'Downloading the updated file — save it over your tracker file.';
+    let where;
+    if (save.via === 'handle') {
+      where = 'The tracker file has been updated in place.';
+    } else if (save.via === 'picker') {
+      where = save.inPlaceFailed
+        ? 'The tracker file could not be updated in place (it may be open in Excel), so the updated file was saved where you chose.'
+        : 'The updated tracker file was saved where you chose.';
+    } else if (save.note === 'writeFailed') {
+      where = 'The tracker file could not be written (it may be open in Excel) — the updated copy is downloading; close the file and save the download over it.';
+    } else {
+      where = 'Downloading the updated file — save it over your tracker file.';
+    }
     setTrackerStatus(
       'ok',
       'Row <b>' + report.rowIndex + '</b> added to <b>' + file.name + '</b> &rarr; sheet <b>' + targetSheet + '</b> — ' +

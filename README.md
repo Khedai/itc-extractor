@@ -81,8 +81,9 @@ Where each value comes from on the form:
 > you pick is remembered as a writable handle, so **Submit to Tracker** writes
 > straight back into the same file (no save dialog). On other browsers the app
 > downloads an updated copy that you save over your tracker file manually. If
-> the tracker is open in Excel while you submit, close it first or the write is
-> skipped and a copy is offered instead.
+> the tracker is open in Excel when you submit, the in-place write fails and the
+> app automatically downloads the updated copy instead — close Excel, then save
+> the download over your tracker.
 
 
 ## Where are drafts saved?
