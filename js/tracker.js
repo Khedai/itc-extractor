@@ -150,6 +150,15 @@
 
   const getEl = (id) => (typeof document !== 'undefined' ? document.getElementById(id) : null);
 
+  // File System Access API state. When the user chooses the tracker through the
+  // native picker we keep the FileSystemFileHandle, so "Submit to Tracker" can
+  // write straight back to the SAME file (a true in-place update — no save-as
+  // dialog that silently writes a copy elsewhere). Without the API (Firefox,
+  // Android) we fall back to a save-as dialog / download.
+  let currentHandle = null; // FileSystemFileHandle — in-place writes
+  let currentFile = null;   // File object — fallback saves
+
+
   function xlsx() {
     if (typeof window !== 'undefined' && window.XLSX) return window.XLSX;
     if (typeof require === 'function') return require('../vendor/xlsx.full.min.js');
@@ -227,8 +236,21 @@
 
 
   async function saveFile(blob, fileName) {
-    // Prefer the File System Access API so the tracker file is overwritten in
-    // place (Chrome / Edge). Fall back to a plain download everywhere else.
+    // 1) In-place write through the stored file handle (Chrome / Edge). This is
+    //    the important path: it overwrites the exact file the user opened — no
+    //    save-as dialog, so the tracker on disk really changes.
+    if (currentHandle) {
+      try {
+        const writable = await currentHandle.createWritable();
+        await writable.write(blob);
+        await writable.close();
+        return { via: 'handle', name: currentHandle.name };
+      } catch (e) {
+        // Permission denied or the file is locked (e.g. open in Excel) — fall
+        // through to a save-as dialog / download rather than losing the row.
+      }
+    }
+    // 2) Save-as dialog (Chrome / Edge without a stored handle).
     if (window.showSaveFilePicker) {
       try {
         const ext = extensionOf(fileName);
@@ -249,6 +271,7 @@
         // Any other failure — fall through to a plain download.
       }
     }
+    // 3) Plain download (Firefox, Android, anything else).
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
@@ -283,12 +306,77 @@
     if (prev && wb.SheetNames.includes(prev)) el.value = prev;
   }
 
-  async function submitFromForm() {
-    const fileEl = getEl('trackerFile');
+  // Open the native file picker when the File System Access API is available so
+  // we keep a writable handle to the chosen file (in-place updates). Otherwise
+  // fall back to the hidden <input type="file">.
+  async function pickTrackerFile() {
+    if (window.showOpenFilePicker) {
+      try {
+        const [handle] = await window.showOpenFilePicker({
+          multiple: false,
+          types: [{
+            description: 'Spreadsheet',
+            accept: {
+              'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': ['.xlsx'],
+              'application/vnd.ms-excel': ['.xls'],
+              'text/csv': ['.csv'],
+              'application/vnd.oasis.opendocument.spreadsheet': ['.ods'],
+            },
+          }],
+        });
+        currentHandle = handle;
+        currentFile = await handle.getFile();
+        await loadTracker(currentFile);
+        return;
+      } catch (e) {
+        if (e && e.name === 'AbortError') return; // user closed the picker
+        // Any other failure — fall through to the file input.
+      }
+    }
+    const fileInput = getEl('trackerFile');
+    if (fileInput) fileInput.click();
+  }
+
+  async function loadTracker(file) {
     const sheetEl = getEl('trackerSheet');
-    const file = fileEl && fileEl.files && fileEl.files[0];
     if (!file) {
-      setTrackerStatus('err', 'Select your tracker Excel file first, then press <b>Submit to Tracker</b>.');
+      if (sheetEl) sheetEl.innerHTML = '';
+      currentHandle = null;
+      currentFile = null;
+      setTrackerStatus('', 'Choose your tracker Excel file and press <b>Submit to Tracker</b>.');
+      return;
+    }
+    try {
+      const wb = await readWorkbook(file);
+      fillSheetSelect(wb, false);
+      currentFile = file;
+      const count = (wb.SheetNames || []).length;
+      const mode = currentHandle
+        ? 'This file can be updated in place when you submit.'
+        : 'This browser saves an updated copy — save it over your tracker file.';
+      setTrackerStatus(
+        'ok',
+        'Loaded <b>' + file.name + '</b> (' + count + ' sheet' + (count === 1 ? '' : 's') + '). ' +
+        'Choose the sheet, then press <b>Submit to Tracker</b>. ' + mode,
+      );
+    } catch (e) {
+      currentHandle = null;
+      currentFile = null;
+      if (sheetEl) sheetEl.innerHTML = '';
+      setTrackerStatus('err', 'Could not read "' + file.name + '": ' + (e && e.message ? e.message : e));
+    }
+  }
+
+  async function submitFromForm() {
+    const sheetEl = getEl('trackerSheet');
+    let file = currentFile;
+    // When we hold a handle, re-read the file fresh from disk in case the user
+    // edited the tracker (or a previous submit changed it) since it was chosen.
+    if (currentHandle) {
+      try { file = await currentHandle.getFile(); } catch (e) { /* keep currentFile */ }
+    }
+    if (!file) {
+      setTrackerStatus('err', 'Choose your tracker Excel file first, then press <b>Submit to Tracker</b>.');
       const panel = getEl('trackerPanel');
       if (panel && panel.scrollIntoView) panel.scrollIntoView({ behavior: 'smooth', block: 'center' });
       return;
@@ -336,9 +424,11 @@
     if (report.created.length) parts.push('created columns <b>' + report.created.join(', ') + '</b>');
     if (report.matched.length) parts.push('filled existing columns <b>' + report.matched.join(', ') + '</b>');
     if (report.skipped.length) parts.push('skipped <b>' + report.skipped.join(', ') + '</b> (no matching column)');
-    const where = save.via === 'picker'
+    const where = save.via === 'handle'
       ? 'The tracker file has been updated in place.'
-      : 'Downloading the updated file — save it over your tracker file.';
+      : save.via === 'picker'
+        ? 'Choose where to save the updated file.'
+        : 'Downloading the updated file — save it over your tracker file.';
     setTrackerStatus(
       'ok',
       'Row <b>' + report.rowIndex + '</b> added to <b>' + file.name + '</b> &rarr; sheet <b>' + targetSheet + '</b> — ' +
@@ -353,26 +443,24 @@
       return;
     }
     const fileEl = getEl('trackerFile');
+    const pickBtn = getEl('trackerPick');
     const btn = getEl('btnTracker');
     const sheetEl = getEl('trackerSheet');
-    if (!fileEl || !btn) return;
+    if (!btn) return;
 
-    fileEl.addEventListener('change', async () => {
-      const file = fileEl.files && fileEl.files[0];
-      if (!file) {
-        if (sheetEl) sheetEl.innerHTML = '';
-        setTrackerStatus('', 'Select your tracker Excel file and press <b>Submit to Tracker</b>.');
-        return;
-      }
-      try {
-        const wb = await readWorkbook(file);
-        fillSheetSelect(wb, false);
-        const count = (wb.SheetNames || []).length;
-        setTrackerStatus('ok', 'Loaded <b>' + file.name + '</b> (' + count + ' sheet' + (count === 1 ? '' : 's') + '). Choose the sheet, then press <b>Submit to Tracker</b>.');
-      } catch (e) {
-        setTrackerStatus('err', 'Could not read "' + file.name + '": ' + (e && e.message ? e.message : e));
-      }
-    });
+    if (pickBtn) pickBtn.addEventListener('click', pickTrackerFile);
+
+    if (fileEl) {
+      fileEl.addEventListener('change', async () => {
+        const file = fileEl.files && fileEl.files[0];
+        // Chosen via the plain <input> → we have no writable handle, so the
+        // submit will fall back to save-as/download. Clear the input so the
+        // same file can be re-chosen after a submit.
+        currentHandle = null;
+        fileEl.value = '';
+        await loadTracker(file);
+      });
+    }
 
     btn.addEventListener('click', submitFromForm);
   }

@@ -39,10 +39,11 @@ Then open <http://localhost:8080>.
 2. **Complete** — fill the manual fields (income, expenses, docs, signatures).
 3. **Submit** — click **Submit & Email**. The form is rendered to a multi-page
    A4 PDF and sent to the configured address.
-4. **Track** — select your tracker spreadsheet (Excel, CSV or ODS) in the
-   **Submit to Tracker** panel, pick the sheet, and press **Submit to Tracker**.
-   The application is appended to the bottom of that sheet and the updated file
-   is saved back (native save dialog on Chrome/Edge, a download elsewhere).
+4. **Track** — in the **Submit to Tracker** panel press **Choose Tracker
+   File…**, pick the spreadsheet (Excel, CSV or ODS), choose the sheet, and
+   press **Submit to Tracker**. The application is appended to the bottom of
+   that sheet. On Chrome/Edge the very file you picked is updated in place;
+   other browsers save an updated copy to save over your tracker.
 
 ## Submit to Tracker
 
@@ -75,10 +76,13 @@ Where each value comes from on the form:
 | Title              | Title                                             |
 | Amount             | Debit Amount → Reduced Amount (fallback), `R`-prefixed |
 
-> **Note on saving** — a website cannot overwrite a file on your disk without
-> asking. Chrome/Edge show a "save as" dialog pre-filled with the tracker's own
-> name so you can save over it; other browsers download the updated file and you
-> save it over your tracker manually.
+> **Note on saving** — a website can only overwrite a file the browser lets it
+> write to. On Chrome/Edge the app uses the File System Access API: the file
+> you pick is remembered as a writable handle, so **Submit to Tracker** writes
+> straight back into the same file (no save dialog). On other browsers the app
+> downloads an updated copy that you save over your tracker file manually. If
+> the tracker is open in Excel while you submit, close it first or the write is
+> skipped and a copy is offered instead.
 
 
 ## Where are drafts saved?

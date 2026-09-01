@@ -40,14 +40,16 @@
   <div class="itc-panel tracker-panel" id="trackerPanel">
     <div class="itc-title">Submit to Tracker</div>
     <div class="itc-grid">
-      <label>Tracker Excel File
-        <input type="file" id="trackerFile" accept=".xlsx,.xls,.csv,.ods">
-      </label>
+      <div class="tracker-file-pick">
+        <label>Tracker Excel File</label>
+        <button type="button" class="btn" id="trackerPick">Choose Tracker File&hellip;</button>
+        <input type="file" id="trackerFile" accept=".xlsx,.xls,.csv,.ods" style="display:none">
+      </div>
       <label>Sheet
         <select id="trackerSheet"></select>
       </label>
     </div>
-    <div class="itc-status" id="trackerStatus">Select your tracker Excel file (and sheet to append to), then press <b>Submit to Tracker</b>. Headers are matched by name &mdash; fields with no matching column are skipped; an empty sheet gets its columns created. The amount always carries an <b>R</b> (Rand).</div>
+    <div class="itc-status" id="trackerStatus">Choose your tracker Excel file (and sheet to append to), then press <b>Submit to Tracker</b>. Headers are matched by name &mdash; fields with no matching column are skipped; an empty sheet gets its columns created. The amount always carries an <b>R</b> (Rand). On Chrome/Edge the chosen file is updated in place; other browsers save an updated copy to save over it.</div>
   </div>
 
 

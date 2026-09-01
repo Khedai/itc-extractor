@@ -128,6 +128,8 @@ td input,td select{border:0;height:21px;padding:2px;font-size:11px}
 /* Tracker panel: file picker wider, sheet selector beside it (no button here —
    the action lives in the sticky toolbar). */
 .tracker-panel .itc-grid{grid-template-columns:2fr 1fr}
+.tracker-file-pick{display:flex;flex-direction:column;gap:4px}
+.tracker-panel #trackerPick{height:30px;width:100%;display:inline-flex;align-items:center;justify-content:center}
 
 .tracker-note{margin:6px 10px;padding:7px 9px;border:1px solid #9aa8bd;background:#f7f9fc;color:#102a5c;font-weight:bold}.tracker-count{font-weight:normal;margin-left:8px}
 
