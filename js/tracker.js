@@ -158,6 +158,12 @@
   let currentHandle = null; // FileSystemFileHandle — in-place writes
   let currentFile = null;   // File object — fallback saves
 
+  // Notification auto-dismiss — the tracker status bar is a transient notice,
+  // not a permanent label. A message clears itself after a few seconds and is
+  // also cleared whenever a new action starts (see clearStatus / ITCTracker).
+  let trackerStatusTimer = null;
+  let trackerDefaultStatus = '';
+
 
   function xlsx() {
     if (typeof window !== 'undefined' && window.XLSX) return window.XLSX;
@@ -313,8 +319,28 @@
   function setTrackerStatus(type, html) {
     const el = getEl('trackerStatus');
     if (!el) return;
+    clearTimeout(trackerStatusTimer);
     el.innerHTML = html;
     el.className = 'itc-status' + (type ? ' ' + type : '');
+    // Notifications remove themselves: success after ~8s, errors after ~15s,
+    // reverting to the neutral hint so stale results never linger.
+    if (type) {
+      trackerStatusTimer = setTimeout(() => {
+        el.className = 'itc-status';
+        el.innerHTML = trackerDefaultStatus;
+      }, type === 'err' ? 15000 : 8000);
+    }
+  }
+
+  // Immediately remove any tracker notification (used when a new report is
+  // opened or the form is reset) and restore the neutral hint.
+  function clearStatus() {
+    clearTimeout(trackerStatusTimer);
+    const el = getEl('trackerStatus');
+    if (el) {
+      el.className = 'itc-status';
+      el.innerHTML = trackerDefaultStatus;
+    }
   }
 
   function fillSheetSelect(wb, keepSelection) {
@@ -480,6 +506,10 @@
     const sheetEl = getEl('trackerSheet');
     if (!btn) return;
 
+    // Capture the neutral hint shown when no notification is active.
+    const statusEl = getEl('trackerStatus');
+    if (statusEl) trackerDefaultStatus = statusEl.innerHTML;
+
     if (pickBtn) pickBtn.addEventListener('click', pickTrackerFile);
 
     if (fileEl) {
@@ -500,7 +530,7 @@
 
   // Expose as a global in the browser (plain <script>) and as a CommonJS module
   // so the same file can be unit-tested with plain Node.
-  const ITCTracker = { FIELD_DEFS, matchScore, matchColumns, appendRows, formatAmount, collectFormValues, submitFromForm, wire };
+  const ITCTracker = { FIELD_DEFS, matchScore, matchColumns, appendRows, formatAmount, collectFormValues, submitFromForm, wire, clearStatus };
   if (typeof module !== 'undefined' && module.exports) module.exports = ITCTracker;
   else if (typeof window !== 'undefined') window.ITCTracker = ITCTracker;
 })();

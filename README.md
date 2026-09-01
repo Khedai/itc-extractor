@@ -64,6 +64,10 @@ uploaded.
 - **R amount** — the amount column always carries an **R** (Rand): `R 5000`, or
   a bare `R` when no amount is filled in.
 
+Result messages are temporary: a notification (e.g. "Row 3 added…" or "Email
+sent") clears itself after a few seconds and is also cleared the moment you pick
+or extract a new ITC report, so stale results never linger on screen.
+
 Where each value comes from on the form:
 
 | Tracker field      | Form field                                        |

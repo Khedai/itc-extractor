@@ -28,16 +28,47 @@
   const za = (n) => Number(n || 0).toLocaleString('en-ZA', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const money = (n) => 'R ' + za(n);
 
+  // Notifications remove themselves: success/info after ~8s, errors after ~15s.
+  // Each surface keeps its own timer so a newer message always replaces an older
+  // one, and stale results never linger.
+  let statusTimer = null;
+  let resultTimer = null;
+  let itcStatusDefault = '';
+
   function setStatus(type, text) {
     const el = $('itcStatus');
+    clearTimeout(statusTimer);
     el.innerHTML = text;
     el.className = 'itc-status' + (type ? ' ' + type : '');
+    if (type) {
+      statusTimer = setTimeout(() => {
+        el.className = 'itc-status';
+        el.innerHTML = itcStatusDefault;
+      }, type === 'err' ? 15000 : 8000);
+    }
   }
 
   function showResult(ok, text) {
     const el = $('resultPanel');
+    clearTimeout(resultTimer);
     el.className = 'result-panel show ' + (ok ? 'ok' : 'err');
     el.textContent = text;
+    resultTimer = setTimeout(() => {
+      el.className = 'result-panel';
+      el.textContent = '';
+    }, ok ? 8000 : 15000);
+  }
+
+  function hideResult() {
+    clearTimeout(resultTimer);
+    $('resultPanel').className = 'result-panel';
+    $('resultPanel').textContent = '';
+  }
+
+  // Drop any tracker notification (e.g. the last "row added" result) when the
+  // user starts working with a new ITC report.
+  function clearTrackerStatus() {
+    if (window.ITCTracker && window.ITCTracker.clearStatus) window.ITCTracker.clearStatus();
   }
 
   // ── Sending overlay (PDF prep + email send) ──────────────────────────────
@@ -169,6 +200,10 @@
   }
 
   async function handleExtract() {
+    // A new report starts a new workflow — drop any stale email/tracker results.
+    hideResult();
+    clearTrackerStatus();
+
     const file = $('itcFile').files[0];
     if (!file) { setStatus('err', 'Please select a Datanamix ITC PDF first.'); return; }
 
@@ -257,17 +292,21 @@
     $('totReduced').textContent = '';
     $('totArrears').textContent = '';
     try { localStorage.removeItem(DRAFT_KEY); } catch (e) {}
-    setStatus('', 'Form and saved draft cleared. Upload a Datanamix ITC PDF to fill it automatically.');
-    $('resultPanel').className = 'result-panel';
+    setStatus('ok', 'Form and saved draft cleared. Upload a Datanamix ITC PDF to fill it automatically.');
+    hideResult();
+    clearTrackerStatus();
   }
 
   // Wire up
   document.addEventListener('DOMContentLoaded', () => {
+    itcStatusDefault = $('itcStatus').innerHTML;
     if (!$('fDate').value) $('fDate').value = new Date().toISOString().split('T')[0];
     $('btnExtract').addEventListener('click', handleExtract);
     $('btnSubmit').addEventListener('click', handleSubmit);
     $('btnReset').addEventListener('click', handleReset);
     $('itcPassword').addEventListener('keydown', (e) => { if (e.key === 'Enter') handleExtract(); });
+    // Picking a new report is itself a new workflow — clear stale tracker results.
+    $('itcFile').addEventListener('change', clearTrackerStatus);
 
     // Draft autosave — every edit is persisted to this device only.
     $('formPage').addEventListener('input', queueDraftSave);
