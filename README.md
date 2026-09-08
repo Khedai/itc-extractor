@@ -2,14 +2,18 @@
 
 A standalone, installable web app that:
 
-1. Opens a **credit-application form with every Datanamix ITC field** (all empty).
+1. Opens the **Khusela application form** — the same layout and fields as the
+   original single-file app — with the Datanamix ITC report import + review.
 2. **Extracts a Datanamix ITC PDF** (including password-protected reports) and
-   **fills the form automatically** — auto-filled fields are highlighted green.
+   **fills the application automatically** — applicant details, marital status,
+   the loans & accounts table and the ITC report-details review panel.
 3. **Formats the filled form as a PDF** and **emails it** when **Submit & Email**
    is pressed. Drafts are autosaved to the device's browser only.
-4. **Appends the application to your tracker spreadsheet** when **Submit to
-   Tracker** is pressed — columns are matched by header, missing columns are
-   skipped, and an empty tracker gets its columns created (see below).
+4. **Submits to the Khusela Sales Tracker** when **Submit to Tracker** is
+   pressed — every application is added to a persistent on-device tracker
+   (browser `localStorage`) with the full 35-column tracker layout, and the
+   updated tracker downloads as `Khusela_Sales_Tracker.csv`. **Export
+   Tracker** re-downloads that CSV without adding a row (see below).
 
 All libraries are vendored locally (`vendor/`) so the app works fully offline.
 
@@ -35,59 +39,90 @@ Then open <http://localhost:8080>.
 
 1. **Extract** — click the panel's file picker, choose the Datanamix ITC PDF,
    enter the report's password if it's protected, and click
-   **Extract & Fill Form**.
+   **Extract ITC Report**.
 2. **Complete** — fill the manual fields (income, expenses, docs, signatures).
 3. **Submit** — click **Submit & Email**. The form is rendered to a multi-page
    A4 PDF and sent to the configured address.
-4. **Track** — in the **Submit to Tracker** panel press **Choose Tracker
-   File…**, pick the spreadsheet (Excel, CSV or ODS), choose the sheet, and
-   press **Submit to Tracker**. The application is appended to the bottom of
-   that sheet. On Chrome/Edge the very file you picked is updated in place;
-   other browsers save an updated copy to save over your tracker.
+4. **Track** — press **✅ Submit to Tracker**. The application is appended to
+   the on-device sales tracker and the full tracker downloads as
+   **Khusela_Sales_Tracker.csv** (Excel-compatible CSV). Press **📊 Export
+   Tracker** any time to re-download the CSV without adding a row.
+5. **Print** — prints the filled application form exactly as it appears.
+6. **Save Draft** — saves the form immediately (it is also autosaved as you
+   type). The saved draft stays on this device only.
+7. **New Application** — clears the form and the saved draft.
 
 ## Submit to Tracker
 
-The tracker panel (below the ITC panel) turns the current application into one
-new row at the **bottom of the sheet you select**. Everything runs in the
-browser — the file is read locally, extended, and saved back; nothing is
-uploaded.
+**✅ Submit to Tracker** appends ONE 35-column row to a **persistent sales
+tracker that lives in this browser** (`localStorage`, key
+`khusela_sales_tracker_v1`) and immediately downloads the whole tracker as an
+Excel-compatible CSV — `Khusela_Sales_Tracker.csv`. There is no shared database
+and nothing is uploaded; the tracker only exists on the device/browser that
+built it, so save the downloaded CSV and merge new rows into your master
+tracker. **📊 Export Tracker** re-downloads the CSV without adding a row.
 
-- **Matched columns** — the sheet's header row is matched against the field
-  names *Name, Surname, ID Number, Account Number, Phone Number, Title* and
-  *Amount*. Common variants count too (`First Name`, `Last Name`, `ID No`,
-  `Acc No`, `Cell`, `Mobile`, …).
-- **No column, no value** — if the sheet has no matching column (for example no
-  *Title*), that field is simply skipped; the app never invents columns for an
-  existing tracker.
-- **Empty tracker** — a brand-new / empty sheet gets all columns created first,
-  then the row.
-- **R amount** — the amount column always carries an **R** (Rand): `R 5000`, or
-  a bare `R` when no amount is filled in.
+Columns (identical to the original Khusela tracker):
 
-Result messages are temporary: a notification (e.g. "Row 3 added…" or "Email
-sent") clears itself after a few seconds and is also cleared the moment you pick
-or extract a new ITC report, so stale results never linger on screen.
+> DATE, CONSULTANT, BRANCH, NAME, SURNAME, ID NUMBER, CELL, WHATSAPP, EMAIL,
+> SPOUSE NAME, SPOUSE SURNAME, SPOUSE ID, SPOUSE CELL, SPOUSE WHATSAPP, SPOUSE
+> EMAIL, ADDRESS, EMPLOYER, APPLICATION TYPE, DEBT REVIEW STATUS, MARITAL
+> STATUS, BANK, ACCOUNT NO, ACCOUNT TYPE, DR STATUS, GROSS SALARY, NETT
+> SALARY, SPOUSE SALARY, TOTAL BALANCE, CURRENT INSTALMENT, REDUCED
+> INSTALMENT, DEBIT ORDER DATE, DEBIT ORDER AMOUNT, OWN AMOUNT, TIME OF CALL,
+> EXT NUMBER.
 
 Where each value comes from on the form:
 
-| Tracker field      | Form field                                        |
-| ------------------ | ------------------------------------------------- |
-| Name               | First Name + Second Name                          |
-| Surname            | Surname                                           |
-| ID Number          | ID Number                                         |
-| Account Number     | Client Ref → Ref → first loan's Acc No (fallback) |
-| Phone Number       | Cellular No → Home Tel → Work Tel (fallback)      |
-| Title              | Title                                             |
-| Amount             | Debit Amount → Reduced Amount (fallback), `R`-prefixed |
+| Tracker field         | Form field                                        |
+| --------------------- | ------------------------------------------------- |
+| DATE                  | Date (top of the form)                            |
+| CONSULTANT            | *(no field on this form — blank)*                 |
+| BRANCH                | Branch                                            |
+| NAME                  | Name (First + Second are combined when extracting)|
+| SURNAME               | Surname                                           |
+| ID NUMBER             | ID                                                |
+| CELL                  | Cell                                              |
+| WHATSAPP              | WhatsApp                                          |
+| EMAIL                 | Email                                             |
+| SPOUSE NAME           | Spouse Name                                       |
+| SPOUSE SURNAME        | Spouse Surname                                    |
+| SPOUSE ID             | Spouse ID                                         |
+| SPOUSE CELL           | Spouse Cell                                       |
+| SPOUSE WHATSAPP       | Spouse WhatsApp                                   |
+| SPOUSE EMAIL          | Spouse Email                                      |
+| ADDRESS               | Address (extract fills Residential Address)       |
+| EMPLOYER              | Employer                                          |
+| APPLICATION TYPE      | Application Type (dropdown)                       |
+| DEBT REVIEW STATUS    | Debt Review Status (dropdown)                     |
+| MARITAL STATUS        | Marital Status (dropdown)                         |
+| BANK                  | Bank                                              |
+| ACCOUNT NO            | Account no.                                       |
+| ACCOUNT TYPE          | Account Type (dropdown)                           |
+| DR STATUS             | DR Status (dropdown)                              |
+| GROSS SALARY          | Gross Salary                                      |
+| NETT SALARY           | Nett Salary                                       |
+| SPOUSE SALARY         | Spouse Salary                                     |
+| TOTAL BALANCE         | Loans table totals row                            |
+| CURRENT INSTALMENT    | Loans table totals row                            |
+| REDUCED INSTALMENT    | Loans table totals row                            |
+| DEBIT ORDER DATE      | Debit Order Date                                  |
+| DEBIT ORDER AMOUNT    | Debit Order Amount (auto = reduced total)         |
+| OWN AMOUNT            | *(no field on this form — blank)*                 |
+| TIME OF CALL          | Time of call                                      |
+| EXT NUMBER            | EXT number                                        |
 
-> **Note on saving** — a website can only overwrite a file the browser lets it
-> write to. On Chrome/Edge the app uses the File System Access API: the file
-> you pick is remembered as a writable handle, so **Submit to Tracker** writes
-> straight back into the same file (no save dialog). On other browsers the app
-> downloads an updated copy that you save over your tracker file manually. If
-> the tracker is open in Excel when you submit, the in-place write fails and the
-> app automatically downloads the updated copy instead — close Excel, then save
-> the download over your tracker.
+Only CONSULTANT (the original's consultant input lives in its header, which is
+not part of this app's header) and OWN AMOUNT (the form has no own-amount
+input) are written **empty** — every other column is filled straight from the
+matching form field.
+
+- Pressing **✅ Submit to Tracker** requires a **Name, Surname and ID Number**
+  (entered or extracted) and a selected **Application Type**.
+- Every press adds another row — rows are never deduplicated (same behaviour as
+  the original).
+- The tracker is stored **only in the browser** — like a saved draft it never
+  leaves the device except as the CSV you choose to download.
 
 
 ## Where are drafts saved?
@@ -99,11 +134,12 @@ using** — they never leave that device:
   PDF itself when you press **Submit & Email**).
 - **Not stored on any server** — there is no backend and no database.
 - **Not downloadable as a draft** — the form itself is never offered as a
-  download; the toolbar's only file output is the tracker spreadsheet you choose
-  to save when you press **Submit to Tracker**.
+  download; the only file output is the tracker CSV from **Submit to Tracker** /
+  **Export Tracker**. Those rows stay in this browser until you save the
+  downloaded CSV over your master tracker.
 - **Private to the browser** — a draft only exists inside that browser profile
   on that machine. Another person using the same app cannot see it.
-- **Cleared** — **Reset Form** wipes the form and the saved draft.
+- **Cleared** — **New Application** wipes the form and the saved draft.
 
 The only data stored in the repo / git history is the app code — never any
 report or applicant data.
@@ -198,12 +234,13 @@ khusela-itc-pwa/
 │   ├── extractor.js    # pdf.js reading + password handling
 │   ├── pdfGenerator.js # form → A4 PDF (html2canvas + jsPDF)
 │   ├── email.js        # FormSubmit email send (no download)
+│   ├── tracker.js      # Khusela Sales Tracker (browser CSV tracker)
 │   └── app.js          # wiring: extract, fill, submit, reset
 ├── vendor/             # pdf.js, html2canvas, jsPDF (offline)
 ├── icons/              # PWA icons (regenerate: powershell tools/make_icons.ps1)
 ├── manifest.webmanifest
 ├── sw.js               # offline cache
-└── tools/              # Node regression test for the parser
+└── tools/              # Node regression tests
 ```
 
 ## Tests
@@ -219,10 +256,18 @@ node tools/test_parser_node.js
 > `sample-itc.pdf` in the sibling `khusela-dashboard/` folder) and its password
 > from `ITC_PDF_PASSWORD` — neither is ever hardcoded.
 
+The tracker's pure core (35-column row building + CSV serialisation) has its
+own plain-Node test:
+
+```bash
+node tools/test_tracker_node.js
+```
+
 ## Security notes
 
 - The app runs entirely in the browser; extracted data never leaves the device
-  except when you submit (PDF → email service). There is **no download feature**.
+  except when you submit (PDF → email service) or when you export the tracker
+  CSV (**Submit to Tracker** / **Export Tracker**).
 - Drafts are stored **only** in the browser's `localStorage` on the device that
   created them — never on a server, never in git.
 - Datanamix reports contain personal data — host this app somewhere you

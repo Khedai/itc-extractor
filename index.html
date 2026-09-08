@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Khusela ITC Extractor</title>
-  <meta name="description" content="Extract Datanamix ITC credit reports into a credit-application form, export as PDF and email it.">
+  <meta name="description" content="Extract Datanamix ITC credit reports into a Khusela application, export as PDF and email it.">
   <meta name="theme-color" content="#102a5c">
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="icon" href="icons/icon-192.png?v=2" type="image/png">
@@ -15,43 +15,14 @@
 
   <!-- Toolbar -->
   <div class="toolbar">
-    <button class="btn secondary" id="btnReset">Reset Form</button>
-    <button class="btn secondary" id="btnTracker">Submit to Tracker</button>
-    <button class="btn red" id="btnSubmit">Submit &amp; Email</button>
+    <button type="button" class="btn green" id="btnTracker">✅ Submit to Tracker</button>
+    <button type="button" class="btn red" id="btnSubmit">📧 Submit &amp; Email</button>
+    <button type="button" class="btn" id="btnExportTracker">📊 Export Tracker</button>
+    <button type="button" class="btn" id="btnPrint">Print</button>
+    <button type="button" class="btn" id="btnSaveDraft">Save Draft</button>
+    <button type="button" class="btn secondary" id="btnReset">New Application</button>
   </div>
   <div class="draft-note">Drafts are autosaved on this device only &mdash; never uploaded, never downloadable.</div>
-
-  <!-- ITC extraction panel -->
-  <div class="itc-panel">
-    <div class="itc-title">ITC Report Extraction</div>
-    <div class="itc-grid">
-      <label>Datanamix ITC PDF
-        <input type="file" id="itcFile" accept="application/pdf">
-      </label>
-      <label>PDF Password (if protected)
-        <input type="password" id="itcPassword">
-      </label>
-      <button class="btn" id="btnExtract">Extract &amp; Fill Form</button>
-    </div>
-    <div class="itc-status" id="itcStatus">Upload a Datanamix ITC PDF and click <b>Extract &amp; Fill Form</b> to fill the form automatically.</div>
-  </div>
-
-  <!-- Tracker export -->
-  <div class="itc-panel tracker-panel" id="trackerPanel">
-    <div class="itc-title">Submit to Tracker</div>
-    <div class="itc-grid">
-      <div class="tracker-file-pick">
-        <label>Tracker Excel File</label>
-        <button type="button" class="btn" id="trackerPick">Choose Tracker File&hellip;</button>
-        <input type="file" id="trackerFile" accept=".xlsx,.xls,.csv,.ods" style="display:none">
-      </div>
-      <label>Sheet
-        <select id="trackerSheet"></select>
-      </label>
-    </div>
-    <div class="itc-status" id="trackerStatus">Choose your tracker Excel file (and sheet to append to), then press <b>Submit to Tracker</b>. Headers are matched by name &mdash; fields with no matching column are skipped; an empty sheet gets its columns created. The amount always carries an <b>R</b> (Rand). On Chrome/Edge the chosen file is updated in place; other browsers save an updated copy to save over it.</div>
-  </div>
-
 
   <!-- Result feedback (email / status) -->
   <div class="result-panel" id="resultPanel"></div>
@@ -67,7 +38,7 @@
     </div>
   </div>
 
-  <!-- The application form -->
+  <!-- The application form — fields match the original Khusela application -->
   <div class="page" id="formPage">
     <div class="top">
       <div class="top-left">
@@ -75,207 +46,159 @@
         <div class="title">CREDIT APPLICATION</div>
       </div>
       <div class="top-mid">
-        <label>Date: <input type="date" class="date" id="fDate"></label>
+        <label>Date: <input type="date" class="date" id="fDate" name="date"></label>
       </div>
       <div class="top-right">
-        <label>Ref: <input type="text" id="fAppRef"></label>
+        <label>Ref: <input type="text" id="fAppRef" name="app_ref"></label>
       </div>
     </div>
 
-    <!-- Application type -->
-    <div class="section">
-      <div class="section-title">Application Type</div>
-      <div class="app-type">
-        <label>Type of application</label>
-        <select id="fAppType">
-          <option value="">— Select —</option>
-          <option>New Loan</option>
-          <option>Consolidation</option>
-          <option>Debt Review</option>
-          <option>Home Loan</option>
-          <option>Other</option>
-        </select>
+    <div class="app-type"><label>Application Type:</label>
+      <select name="application_type">
+        <option>Mediation</option><option>Debt Review</option><option>Debt Review Removal</option><option>DM/DRRR</option>
+      </select>
+      <label style="margin-left:auto">Branch:</label><input style="width:235px" name="branch">
+    </div>
+
+    <!-- ITC extraction (app chrome — never included in the emailed PDF) -->
+    <div class="itc-panel">
+      <div class="itc-title">ITC REPORT IMPORT &amp; EXTRACTION</div>
+      <div class="itc-grid">
+        <label>Upload Datanamix ITC Report (PDF)
+          <input id="itcFile" type="file" accept="application/pdf">
+        </label>
+        <label>ITC Report Password
+          <input id="itcPassword" type="password" placeholder="Enter report password">
+        </label>
+        <button type="button" class="btn" id="btnExtract">Extract ITC Report</button>
+      </div>
+      <div id="itcStatus" class="itc-status">Select the client's Datanamix ITC PDF and enter the password.</div>
+    </div>
+
+    <!-- ITC report details — on-screen only, never in the emailed PDF -->
+    <div class="itc-review" id="itcReview">
+      <div class="section-title">ITC Report Details</div>
+      <div class="itc-review-grid">
+        <label>Report Reference<input id="itcReportRefView" readonly></label>
+        <label>Search Date<input id="itcSearchDateView" readonly></label>
+        <label>Second Name<input id="itcSecondNameView" readonly></label>
+        <label>Maiden Name<input id="itcMaidenView" readonly></label>
+        <label>Title<input id="itcTitleView" readonly></label>
+        <label>Gender<input id="itcGenderView" readonly></label>
+        <label>Birth Date<input id="itcBirthView" readonly></label>
+        <label>Home Telephone<input id="itcHomeView" readonly></label>
+        <label>Work Telephone<input id="itcWorkView" readonly></label>
+        <label>Postal Address<input id="itcPostalView" readonly></label>
+        <label>Consumer Score<input id="itcScoreView" readonly></label>
+        <label>Risk Category<input id="itcRiskView" readonly></label>
+        <label>Debt Review Status<input id="itcDebtReviewView" readonly></label>
+        <label>Total Monthly Instalments<input id="itcTotalInstView" readonly></label>
+        <label>Total Outstanding Debt<input id="itcTotalDebtView" readonly></label>
+        <label>Total Arrears<input id="itcTotalArrearsView" readonly></label>
       </div>
     </div>
 
-    <!-- Consumer identity -->
     <div class="section">
-      <div class="section-title">Consumer Identity Information</div>
+      <div class="section-title">Applicant Details:</div>
       <div class="personal">
         <div class="col">
-          <div class="field"><label>Surname</label><input id="fSurname"></div>
-          <div class="field"><label>First Name</label><input id="fFirst"></div>
-          <div class="field"><label>Second Name</label><input id="fSecond"></div>
-          <div class="field"><label>Maiden Name</label><input id="fMaiden"></div>
-          <div class="field"><label>ID Number</label><input id="fId"></div>
-          <div class="field"><label>Passport No</label><input id="fPassport"></div>
+          <div class="field"><label>Name:</label><input id="name" name="name"></div>
+          <div class="field"><label>Surname:</label><input id="surname" name="surname"></div>
+          <div class="field"><label>Spouse Name:</label><input name="spouse_name"></div>
+          <div class="field"><label>Spouse Surname:</label><input name="spouse_surname"></div>
+          <div class="field"><label>Address:</label><textarea class="address" id="address" name="address"></textarea></div>
         </div>
         <div class="col">
-          <div class="field"><label>Title</label><input id="fTitle"></div>
-          <div class="field"><label>Gender</label><input id="fGender"></div>
-          <div class="field"><label>Birth Date</label><input id="fBirth"></div>
-          <div class="field"><label>Home Tel</label><input id="fHomeTel"></div>
-          <div class="field"><label>Work Tel</label><input id="fWorkTel"></div>
-          <div class="field"><label>Cellular No</label><input id="fCell"></div>
-          <div class="field"><label>Email</label><input id="fEmail"></div>
-          <div class="field"><label>Marital Status</label><input id="fMarital"></div>
+          <div class="field short"><label>ID:</label><input id="id" name="id"></div>
+          <div class="field short"><label>Email:</label><input id="email" name="email"></div>
+          <div class="field short"><label>Spouse ID:</label><input name="spouse_id"></div>
+          <div class="field short"><label>Spouse Email:</label><input name="spouse_email"></div>
         </div>
         <div class="col">
-          <div class="field"><label>Employer</label><input id="fEmployer"></div>
-          <div class="field"><label>Residential Address</label><textarea id="fResidential" class="address"></textarea></div>
-          <div class="field"><label>Postal Address</label><textarea id="fPostal" class="address"></textarea></div>
+          <div class="field short"><label>Cell:</label><input name="cell"></div>
+          <div class="field short"><label>Whatsapp:</label><input name="whatsapp"></div>
+          <div class="field short"><label>Spouse Cell:</label><input name="spouse_cell"></div>
+          <div class="field short"><label>Spouse Whatsapp:</label><input name="spouse_whatsapp"></div>
         </div>
       </div>
     </div>
 
-    <!-- Report details (from ITC) -->
-    <div class="section">
-      <div class="section-title">Report Details</div>
-      <div class="details">
-        <div>
-          <div class="field short"><label>Report Ref</label><input id="fReportRef"></div>
-          <div class="field short"><label>Client Ref</label><input id="fClientRef"></div>
-          <div class="field short"><label>Search Date</label><input id="fSearchDate"></div>
-          <div class="field short"><label>Consumer Score</label><input id="fScore"></div>
-        </div>
-        <div>
-          <div class="field short"><label>Risk Category</label><input id="fRisk"></div>
-          <div class="field short"><label>Score Date</label><input id="fScoreDate"></div>
-          <div class="field short"><label>Exception Code</label><input id="fExceptionCode"></div>
-          <div class="field short"><label>Debt Review</label><input id="fDebtReview"></div>
-        </div>
-        <div>
-          <div class="field short"><label>Home Affairs</label><input id="fHomeVerification"></div>
-          <div class="field short"><label>Deceased Status</label><input id="fHomeDeceased"></div>
-          <div class="field short"><label>Judgements</label><input id="fJudgements"></div>
-          <div class="field short"><label>Defaults</label><input id="fDefaults"></div>
-          <div class="field short"><label>Adverse Info</label><input id="fAdverse"></div>
+    <div class="details">
+      <div>
+        <div class="field"><label>Employer:</label><input id="employer" name="employer"></div>
+        <div class="field"><label>Bank:</label><input name="bank"></div>
+      </div>
+      <div>
+        <div class="field"><label>Debt Review Status:</label><select name="debt_review_status"><option>Not Under Debt Review</option><option>Under Debt Review</option><option>Previously Under Debt Review</option></select></div>
+        <div class="field"><label>Account no.:</label><input name="account_no"></div>
+      </div>
+      <div>
+        <div class="field"><label>Marital Status:</label><select name="marital_status"><option>Single</option><option>Married</option><option>Married COP</option><option>Divorced</option><option>Widowed</option></select></div>
+        <div class="field"><label>Account Type:</label><select name="account_type"><option>Savings</option><option>Cheque</option><option>Transaction</option></select></div>
+      </div>
+    </div>
+
+    <div class="income-docs">
+      <div class="income">
+        <div class="section-title">Income:</div>
+        <div class="field"><label>Gross Salary:</label><input class="money" name="gross_salary" type="number" step="0.01"></div>
+        <div class="field"><label>Nett Salary:</label><input class="money" name="nett_salary" type="number" step="0.01"></div>
+        <div class="field"><label>Spouse Salary:</label><input class="money" name="spouse_salary" type="number" step="0.01"></div>
+        <div class="field"><label>DR Status:</label><select name="dr_status"><option>A</option><option>A1</option><option>B</option><option>C</option><option>D3</option><option>D4</option><option>F1</option><option>F2</option><option>G</option><option>G1</option><option>H</option><option>I</option><option>J</option></select></div>
+      </div>
+      <div class="docs">
+        <div class="section-title">DOCS</div>
+        <div class="doc-grid">
+          <div class="doc">ID Copy<br><input type="checkbox" name="id_copy"></div>
+          <div class="doc">Latest Payslip<br><input type="checkbox" name="payslip"></div>
+          <div class="doc">Proof of Address<br><input type="checkbox" name="proof_address"></div>
         </div>
       </div>
     </div>
 
-    <!-- Income & documentation (manual) -->
-    <div class="section">
-      <div class="section-title">Income &amp; Documentation</div>
-      <div class="income-docs">
-        <div class="income">
-          <div class="field"><label>Gross Income</label><input id="fGrossIncome"></div>
-          <div class="field"><label>Net Income</label><input id="fNetIncome"></div>
-          <div class="field"><label>Other Income</label><input id="fOtherIncome"></div>
-          <div class="field"><label>Occupation</label><input id="fOccupation"></div>
+    <div class="main">
+      <div class="loans">
+        <div class="section-title">Loans And Accounts</div>
+        <table id="loans">
+          <thead><tr><th class="rowno">#</th><th class="creditor">Creditor</th><th class="acc">Acc Num/Ref</th><th class="bal">Balance of Acc</th><th class="cur">Current Instalment</th><th class="red">Reduced Instalment</th><th class="atype">Account Type</th></tr></thead>
+          <tbody></tbody>
+          <tfoot><tr class="total"><td colspan="3" style="text-align:right">TOTALS</td><td id="totalBalance">R 0.00</td><td id="totalCurrent">R 0.00</td><td id="totalReduced">R 0.00</td><td></td></tr></tfoot>
+        </table>
+      </div>
+      <div class="side">
+        <div class="debit">
+          <div class="field"><label>Debit Order Date:</label><input class="date" type="date" name="debit_order_date"></div>
+          <div class="field amount"><label>Debit Order Amount:</label><input id="debitOrderAmount" name="debit_order_amount" readonly></div>
         </div>
-        <div class="docs">
-          <div class="doc-grid">
-            <div class="doc">Payslips (3m)<br><input type="checkbox"></div>
-            <div class="doc">Bank Statements (3m)<br><input type="checkbox"></div>
-            <div class="doc">ID Copy<br><input type="checkbox"></div>
-            <div class="doc">Proof of Residence<br><input type="checkbox"></div>
-            <div class="doc">Other<br><input type="checkbox"></div>
-          </div>
+        <div class="signature">
+          <div class="section-title">Signature:</div>
+          <div class="two"><div><div class="sigbox"></div><center>Applicant 1</center></div><div><div class="sigbox"></div><center>Applicant 2</center></div></div>
         </div>
       </div>
     </div>
 
-
-    <!-- Credit obligations (loans table + side summary) -->
-    <div class="section">
-      <div class="section-title">Credit Obligations</div>
-      <div class="main">
-        <div class="loans">
-          <table>
-            <thead>
-              <tr>
-                <th class="rowno">#</th>
-                <th class="creditor">Creditor</th>
-                <th class="acc">Acc No</th>
-                <th class="bal">Balance</th>
-                <th class="cur">Instalment</th>
-                <th class="red">Reduced</th>
-                <th class="arr">Arrears</th>
-                <th class="atype">Type</th>
-                <th class="st">Status</th>
-              </tr>
-            </thead>
-            <tbody id="loansBody">
-              <tr><td class="rowno">1</td><td><input></td><td><input></td><td><input class="money"></td><td><input class="money"></td><td><input class="money"></td><td><input class="money"></td><td><input></td><td><input></td></tr>
-              <tr><td class="rowno">2</td><td><input></td><td><input></td><td><input class="money"></td><td><input class="money"></td><td><input class="money"></td><td><input class="money"></td><td><input></td><td><input></td></tr>
-              <tr><td class="rowno">3</td><td><input></td><td><input></td><td><input class="money"></td><td><input class="money"></td><td><input class="money"></td><td><input class="money"></td><td><input></td><td><input></td></tr>
-              <tr><td class="rowno">4</td><td><input></td><td><input></td><td><input class="money"></td><td><input class="money"></td><td><input class="money"></td><td><input class="money"></td><td><input></td><td><input></td></tr>
-              <tr><td class="rowno">5</td><td><input></td><td><input></td><td><input class="money"></td><td><input class="money"></td><td><input class="money"></td><td><input class="money"></td><td><input></td><td><input></td></tr>
-              <tr><td class="rowno">6</td><td><input></td><td><input></td><td><input class="money"></td><td><input class="money"></td><td><input class="money"></td><td><input class="money"></td><td><input></td><td><input></td></tr>
-              <tr><td class="rowno">7</td><td><input></td><td><input></td><td><input class="money"></td><td><input class="money"></td><td><input class="money"></td><td><input class="money"></td><td><input></td><td><input></td></tr>
-              <tr><td class="rowno">8</td><td><input></td><td><input></td><td><input class="money"></td><td><input class="money"></td><td><input class="money"></td><td><input class="money"></td><td><input></td><td><input></td></tr>
-            </tbody>
-            <tfoot class="total">
-              <tr>
-                <td colspan="2">TOTALS</td>
-                <td></td>
-                <td class="money" id="totBalance"></td>
-                <td class="money" id="totInstalment"></td>
-                <td class="money" id="totReduced"></td>
-                <td class="money" id="totArrears"></td>
-                <td></td>
-                <td></td>
-              </tr>
-            </tfoot>
-          </table>
-        </div>
-        <div class="side">
-          <div class="field"><label>Total Instalments</label><input id="fTotalInst"></div>
-          <div class="field"><label>Total Debt</label><input id="fTotalDebt"></div>
-          <div class="field"><label>Total Arrears</label><input id="fTotalArrears"></div>
-          <div class="field"><label>Total Reduced</label><input id="fTotalReduced"></div>
-          <div class="field"><label>Active Accounts</label><input id="fActiveAccounts"></div>
-          <div class="field"><label>Good Standing</label><input id="fGoodStanding"></div>
-          <div class="field"><label>Accounts Arrears</label><input id="fArrearsAccounts"></div>
-          <div class="field"><label>Paid Up / Closed</label><input id="fPaidUpAccounts"></div>
-          <div class="debit">
-            <div class="section-title">Debit Order</div>
-            <div class="field"><label>Reduced Amount</label><input id="fReducedAmount"></div>
-            <div class="field amount"><label>Amount</label><input id="fDebitAmount"></div>
-            <div class="field"><label>Date</label><input type="date" id="fDebitDate"></div>
-          </div>
-          <div class="signature">
-            <div class="section-title">Applicant Signature</div>
-            <div class="sigbox"></div>
-          </div>
+    <div class="expense-consent">
+      <div class="expenses">
+        <div class="section-title">Expenses:</div>
+        <div class="field"><label>Groceries:</label><input class="expense money" type="number" name="groceries" step="0.01"></div>
+        <div class="field"><label>Rent/Bond:</label><input class="expense money" type="number" name="rent" step="0.01"></div>
+        <div class="field"><label>Transport:</label><input class="expense money" type="number" name="transport" step="0.01"></div>
+        <div class="field"><label>School Fees:</label><input class="expense money" type="number" name="school" step="0.01"></div>
+        <div class="field"><label>Rates:</label><input class="expense money" type="number" name="rates" step="0.01"></div>
+        <div class="field"><label>Water &amp; Electricity:</label><input class="expense money" type="number" name="water" step="0.01"></div>
+        <div class="field"><label>Total Expenses:</label><input id="expenseTotal" class="money" readonly></div>
+      </div>
+      <div class="consent">
+        <div class="consent-box">
+          I hereby consent to allow KHUSELA DEBT MANAGEMENT to debit my bank account for payments due under this contract. I understand that I will be required to authorize a debit order through the Debi-Check process. If I fail to authorize the Debi-Check process within the specified time frame, I acknowledge that KHUSELA DEBT MANAGEMENT will automatically raise a debit order against my account. I confirm that I have read and understood this consent and the terms of the Debi-Check process.
         </div>
       </div>
     </div>
 
-
-    <!-- Expenses & consent (manual) -->
-    <div class="section">
-      <div class="section-title">Expenses &amp; Consent</div>
-      <div class="expense-consent">
-        <div class="expenses">
-          <div class="field"><label>Rent / Bond</label><input id="fRent"></div>
-          <div class="field"><label>Food &amp; Groceries</label><input id="fFood"></div>
-          <div class="field"><label>Transport</label><input id="fTransport"></div>
-          <div class="field"><label>Insurance</label><input id="fInsurance"></div>
-          <div class="field"><label>Medical</label><input id="fMedical"></div>
-          <div class="field"><label>Other</label><input id="fOtherExp"></div>
-        </div>
-        <div class="consent">
-          <div class="consent-box">
-            I, the undersigned, declare that the information provided on this application is true and
-            correct to the best of my knowledge. I consent to Khusela performing a credit bureau enquiry
-            against my personal information, and I understand that the information may be shared with
-            registered credit providers for the purpose of assessing this application.
-            <div class="checkline" style="margin-top:10px">
-              <input type="checkbox" id="fConsent">
-              <label for="fConsent">I agree and consent</label>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- Footer -->
     <div class="footer">
-      <div><label>Name</label><input type="text" id="fSigName"></div>
-      <div><label>Date</label><input type="text" id="fSigDate"></div>
-      <div><label>Signature</label><input type="text" id="fSig"></div>
+      <span>Time of call: <input type="text" name="call_time"></span>
+      <span>EXT number: <input type="text" name="ext_number"></span>
+      <span class="checkline"><label>CPI <input type="checkbox" name="cpi"></label><label>CELL PHONE <input type="checkbox" name="cell_phone"></label><label>OTHER <input type="checkbox" name="other"></label></span>
     </div>
   </div>
 
@@ -295,7 +218,6 @@
   <script src="vendor/pdf.min.js"></script>
   <script src="vendor/html2canvas.min.js"></script>
   <script src="vendor/jspdf.umd.min.js"></script>
-  <script src="vendor/xlsx.full.min.js"></script>
   <script src="js/config.js"></script>
   <script src="js/itcParser.js"></script>
   <script src="js/extractor.js"></script>
@@ -305,4 +227,7 @@
   <script src="js/app.js"></script>
 </body>
 </html>
+
+
+
 

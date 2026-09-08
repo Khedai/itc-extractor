@@ -33,13 +33,11 @@
       const el = document.getElementById(id);
       return el ? String(el.value || '').trim() : '';
     };
-    const first = get('fFirst');
-    const surname = get('fSurname');
-    const name = [first, surname].filter(Boolean).join(' ');
+    const name = [get('name'), get('surname')].filter(Boolean).join(' ');
     return {
       name: name,
-      email: get('fEmail'),
-      id: get('fId'),
+      email: get('email'),
+      id: get('id'),
       date: get('fDate'),
     };
   }

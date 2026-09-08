@@ -115,6 +115,13 @@
       else dst.value = src.value;
     });
 
+    // App chrome inside the page (ITC upload panel + ITC report-details review)
+    // must never appear in the emailed document — the original's PDF captures
+    // only the application form sections.
+    clone.querySelectorAll('.itc-panel, .itc-review').forEach((node) => {
+      if (node.parentNode) node.parentNode.removeChild(node);
+    });
+
     try {
       const canvas = await window.html2canvas(clone, {
         scale: scale,

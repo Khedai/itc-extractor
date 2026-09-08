@@ -1,89 +1,99 @@
-// Unit test for the tracker export logic (js/tracker.js): column matching,
-// skip-when-no-column, create-when-empty, R-prefixed amount, and a full
-// SheetJS round-trip.
+// Unit test for the Khusela Sales Tracker logic (js/tracker.js): the 35-column
+// header set must match the original tracker exactly, buildRow() must map each
+// source onto its correct column (leaving missing sources empty), and the CSV
+// serialisation must quote/escape like the original.
 // Run: node tools/test_tracker_node.js
 const assert = require('assert');
-const XLSX = require('../vendor/xlsx.full.min.js');
-const tracker = require('../js/tracker.js');
+const t = require('../js/tracker.js');
 
-const { FIELD_DEFS, matchColumns, appendRows, formatAmount } = tracker;
+const { TRACKER_HEADERS, buildRow, csvCell, toCsv } = t;
 const pass = (n) => console.log('PASS ' + n);
 
-// ── 1. Full header → every field maps to the right column ─────────────────
-const header = ['First Name', 'Last Name', 'ID Number', 'Account No', 'Cell', 'Title', 'Amount'];
-const assigned = matchColumns(header, FIELD_DEFS);
-assert.strictEqual(assigned.get('name'), 0, 'name -> First Name');
-assert.strictEqual(assigned.get('surname'), 1, 'surname -> Last Name');
-assert.strictEqual(assigned.get('id'), 2, 'id -> ID Number');
-assert.strictEqual(assigned.get('account'), 3, 'account -> Account No');
-assert.strictEqual(assigned.get('phone'), 4, 'phone -> Cell');
-assert.strictEqual(assigned.get('title'), 5, 'title -> Title');
-assert.strictEqual(assigned.get('amount'), 6, 'amount -> Amount');
-assert.strictEqual(assigned.size, 7, 'all 7 fields assigned');
+// ── 1. The 35 headers match the original Khusela tracker exactly ──────────
+const expected = [
+  'DATE', 'CONSULTANT', 'BRANCH', 'NAME', 'SURNAME', 'ID NUMBER',
+  'CELL', 'WHATSAPP', 'EMAIL', 'SPOUSE NAME', 'SPOUSE SURNAME',
+  'SPOUSE ID', 'SPOUSE CELL', 'SPOUSE WHATSAPP', 'SPOUSE EMAIL',
+  'ADDRESS', 'EMPLOYER', 'APPLICATION TYPE', 'DEBT REVIEW STATUS',
+  'MARITAL STATUS', 'BANK', 'ACCOUNT NO', 'ACCOUNT TYPE', 'DR STATUS',
+  'GROSS SALARY', 'NETT SALARY', 'SPOUSE SALARY', 'TOTAL BALANCE',
+  'CURRENT INSTALMENT', 'REDUCED INSTALMENT', 'DEBIT ORDER DATE',
+  'DEBIT ORDER AMOUNT', 'OWN AMOUNT', 'TIME OF CALL', 'EXT NUMBER',
+];
+assert.deepStrictEqual(TRACKER_HEADERS, expected, 'headers match original tracker');
+assert.strictEqual(TRACKER_HEADERS.length, 35, '35 columns');
 pass(1);
 
-// ── 2. No Title column → title skipped, everything else still matched ─────
-const header2 = ['Name', 'Surname', 'ID', 'Cellphone', 'Amount'];
-const assigned2 = matchColumns(header2, FIELD_DEFS);
-assert.ok(!assigned2.has('title'), 'title has no column and is skipped');
-assert.strictEqual(assigned2.get('name'), 0);
-assert.strictEqual(assigned2.get('surname'), 1);
-assert.strictEqual(assigned2.get('id'), 2);
-assert.strictEqual(assigned2.get('phone'), 3);
+// ── 2. buildRow maps every source to the right header, missing → '' ────────
+const sources = {
+  date: '2026-09-08', consultant: '', branch: '', name: 'John Peter',
+  surname: 'Doe', id: '8501011234087', cell: '071 000 0000', whatsapp: '',
+  email: 'john@example.com', spouse_name: '', spouse_surname: '',
+  spouse_id: '', spouse_cell: '', spouse_whatsapp: '', spouse_email: '',
+  address: '1 Main Rd', employer: 'ACME', application_type: 'Debt Review',
+  debt_review_status: '', marital_status: 'Married', bank: '',
+  account_no: 'CLIENT-1', account_type: '', dr_status: '',
+  gross_salary: '25000', nett_salary: '21000', spouse_salary: '',
+  total_balance: '100 000,00', current_instalment: '4 000,00',
+  reduced_instalment: '2 800,00', debit_order_date: '2026-10-01',
+  debit_order_amount: 'R 2 800,00', own_amount: '', call_time: '', ext_number: '',
+};
+const row = buildRow(sources);
+assert.strictEqual(row.NAME, 'John Peter');
+assert.strictEqual(row.SURNAME, 'Doe');
+assert.strictEqual(row['ID NUMBER'], '8501011234087');
+assert.strictEqual(row.CELL, '071 000 0000');
+assert.strictEqual(row.EMAIL, 'john@example.com');
+assert.strictEqual(row.ADDRESS, '1 Main Rd');
+assert.strictEqual(row.EMPLOYER, 'ACME');
+assert.strictEqual(row['APPLICATION TYPE'], 'Debt Review');
+assert.strictEqual(row['MARITAL STATUS'], 'Married');
+assert.strictEqual(row['ACCOUNT NO'], 'CLIENT-1');
+assert.strictEqual(row['GROSS SALARY'], '25000');
+assert.strictEqual(row['NETT SALARY'], '21000');
+assert.strictEqual(row['TOTAL BALANCE'], '100 000,00');
+assert.strictEqual(row['CURRENT INSTALMENT'], '4 000,00');
+assert.strictEqual(row['REDUCED INSTALMENT'], '2 800,00');
+assert.strictEqual(row['DEBIT ORDER DATE'], '2026-10-01');
+assert.strictEqual(row['DEBIT ORDER AMOUNT'], 'R 2 800,00');
+assert.strictEqual(row.CONSULTANT, '');
+assert.strictEqual(row.BRANCH, '');
+assert.strictEqual(row.WHATSAPP, '');
+assert.strictEqual(row['SPOUSE NAME'], '');
+assert.strictEqual(row.BANK, '');
+assert.strictEqual(row['ACCOUNT TYPE'], '');
+assert.strictEqual(row['DR STATUS'], '');
+assert.strictEqual(row['SPOUSE SALARY'], '');
+assert.strictEqual(row['OWN AMOUNT'], '');
+assert.strictEqual(row['TIME OF CALL'], '');
+assert.strictEqual(row['EXT NUMBER'], '');
+assert.strictEqual(Object.keys(row).length, 35, 'row has exactly 35 keys');
 pass(2);
 
-// ── 3. Empty sheet → all columns created, values appended, R on amount ────
-const values = { name: 'John', surname: 'Doe', id: '8501011234087', account: 'ACC1', phone: '071 000 0000', title: 'Mr', amount: 'R 500' };
-let res = appendRows([], values, FIELD_DEFS);
-assert.deepStrictEqual(res.report.created, FIELD_DEFS.map((f) => f.label), 'all columns created');
-assert.deepStrictEqual(res.report.matched, [], 'nothing matched existing columns');
-assert.deepStrictEqual(res.report.skipped, [], 'nothing skipped');
-assert.strictEqual(res.report.rowIndex, 2, 'appended row is row 2');
-assert.deepStrictEqual(res.rows[0], ['Name', 'Surname', 'ID Number', 'Account Number', 'Phone Number', 'Title', 'Amount']);
-assert.deepStrictEqual(res.rows[1], ['John', 'Doe', '8501011234087', 'ACC1', '071 000 0000', 'Mr', 'R 500']);
+// ── 3. buildRow with no sources → all columns empty ────────────────────────
+const blank = buildRow(null);
+TRACKER_HEADERS.forEach((h) => assert.strictEqual(blank[h], '', h + ' empty'));
 pass(3);
 
-// ── 4. Existing sheet → append at the bottom; amount uses the formatted value ──
-let res4 = appendRows(
-  [['Name', 'Surname', 'Amount'], ['Jane', 'Smith', 'R 100']],
-  { name: 'John', surname: 'Doe', amount: formatAmount('4500') },
-  FIELD_DEFS,
-);
-assert.deepStrictEqual(res4.report.matched, ['Name', 'Surname', 'Amount'], 'matched columns reported');
-assert.deepStrictEqual(res4.report.skipped, ['ID Number', 'Account Number', 'Phone Number', 'Title'], 'missing columns skipped');
-assert.strictEqual(res4.report.rowIndex, 3);
-assert.deepStrictEqual(res4.rows[2], ['John', 'Doe', 'R 4500']);
+// ── 4. CSV cell quoting / escaping matches the original ───────────────────
+assert.strictEqual(csvCell('plain'), '"plain"');
+assert.strictEqual(csvCell('has "quotes"'), '"has ""quotes"""');
+assert.strictEqual(csvCell(''), '""');
+assert.strictEqual(csvCell(null), '""');
+assert.strictEqual(csvCell('R 1 234,56'), '"R 1 234,56"');
 pass(4);
 
-// ── 5. formatAmount: bare number gets R prefix, existing R kept, empty → "R" ──
-assert.strictEqual(formatAmount('4500'), 'R 4500', 'bare number prefixed');
-assert.strictEqual(formatAmount('R 4500'), 'R 4500', 'existing R kept');
-assert.strictEqual(formatAmount('  R 4500.00 '), 'R 4500.00', 'trimmed existing R kept');
-assert.strictEqual(formatAmount(''), 'R', 'empty → bare R');
-assert.strictEqual(formatAmount(null), 'R', 'null → bare R');
-
-// ── 6. No amount at all → amount column still gets the bare "R" ───────────
-let res5 = appendRows([['Name', 'Surname', 'Amount'], ['A', 'B', 'R 1']], { name: 'C', surname: 'D', amount: formatAmount('') }, FIELD_DEFS);
-assert.strictEqual(res5.rows[2][2], 'R', 'bare R written into the amount column');
+// ── 5. toCsv: header line first, then one quoted row per tracker row ──────
+const csv = toCsv([buildRow(sources)]);
+const lines = csv.split('\n').filter((l) => l.length);
+assert.strictEqual(lines.length, 2, 'header + one row');
+assert.strictEqual(lines[0], TRACKER_HEADERS.join(','));
+const cells = lines[1].split('","').map((c, i, a) => i === 0 || i === a.length - 1 ? c.replace(/^"|"$/g, '') : c);
+assert.strictEqual(cells.length, 35, 'one row has 35 cells');
+assert.strictEqual(cells[3], 'John Peter');
+assert.strictEqual(cells[4], 'Doe');
+assert.strictEqual(cells[5], '8501011234087');
+assert.strictEqual(cells[31], 'R 2 800,00');
 pass(5);
-pass(6);
-
-// ── 7. Unrelated headers → clear error, nothing appended ──────────────────
-let res6 = appendRows([['Foo', 'Bar'], ['x', 'y']], values, FIELD_DEFS);
-assert.ok(res6.report.error && res6.report.error.indexOf('No matching columns') === 0, 'error surfaced');
-assert.strictEqual(res6.rows.length, 2, 'no row appended on no-match');
-pass(7);
-
-// ── 8. Full SheetJS round-trip (CSV in → xlsx out → read back) ────────────
-const wb = XLSX.read(new Uint8Array(new TextEncoder().encode('Name,Surname,Amount\nOld,Entry,200\n')).buffer, { type: 'array' });
-const sheetName = wb.SheetNames[0];
-const rows = XLSX.utils.sheet_to_json(wb.Sheets[sheetName], { header: 1, defval: '' });
-const r7 = appendRows(rows, { name: 'New', surname: 'Person', amount: formatAmount('900') }, FIELD_DEFS);
-wb.Sheets[sheetName] = XLSX.utils.aoa_to_sheet(r7.rows);
-const out = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
-const wb2 = XLSX.read(out, { type: 'array' });
-const rowsBack = XLSX.utils.sheet_to_json(wb2.Sheets[sheetName], { header: 1, defval: '' });
-assert.deepStrictEqual(rowsBack, [['Name', 'Surname', 'Amount'], ['Old', 'Entry', 200], ['New', 'Person', 'R 900']]);
-pass(8);
 
 console.log('\nALL TRACKER TESTS PASSED');
