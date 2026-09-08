@@ -9,8 +9,8 @@
 //                        (Khusela_Sales_Tracker.csv).
 //   • Export Tracker     re-downloads that CSV without adding a row.
 //
-// Columns are identical to the original tracker (including the OWN AMOUNT
-// column, which stays empty — the form has no Own Amount field):
+// Columns are identical to the original tracker (CONSULTANT stays empty — this
+// app's header has no consultant input):
 //   DATE, CONSULTANT, BRANCH, NAME, SURNAME, ID NUMBER, CELL, WHATSAPP, EMAIL,
 //   SPOUSE NAME, SPOUSE SURNAME, SPOUSE ID, SPOUSE CELL, SPOUSE WHATSAPP,
 //   SPOUSE EMAIL, ADDRESS, EMPLOYER, APPLICATION TYPE, DEBT REVIEW STATUS,
@@ -115,9 +115,8 @@
   const stripRand = (s) => String(s || '').replace(/^R\s*/, '');
 
   // Every value the tracker knows, read from the form's name= fields exactly
-  // as the original did. CONSULTANT and OWN AMOUNT have no field on this form
-  // (the header has no consultant input and the form has no own-amount input),
-  // so those cells are written empty.
+  // as the original did. CONSULTANT has no field on this form (the header has
+  // no consultant input), so that cell is written empty.
   function collectSources() {
     return {
       date: val('date'),
@@ -152,7 +151,7 @@
       reduced_instalment: stripRand(elText('totalReduced')),
       debit_order_date: val('debit_order_date'),
       debit_order_amount: val('debit_order_amount'),
-      own_amount: '',
+      own_amount: val('own_amount'),
       call_time: val('call_time'),
       ext_number: val('ext_number'),
     };

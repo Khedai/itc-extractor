@@ -108,14 +108,13 @@ Where each value comes from on the form:
 | REDUCED INSTALMENT    | Loans table totals row                            |
 | DEBIT ORDER DATE      | Debit Order Date                                  |
 | DEBIT ORDER AMOUNT    | Debit Order Amount (auto = reduced total)         |
-| OWN AMOUNT            | *(no field on this form — blank)*                 |
+| OWN AMOUNT            | Own Amount                                       |
 | TIME OF CALL          | Time of call                                      |
 | EXT NUMBER            | EXT number                                        |
 
 Only CONSULTANT (the original's consultant input lives in its header, which is
-not part of this app's header) and OWN AMOUNT (the form has no own-amount
-input) are written **empty** — every other column is filled straight from the
-matching form field.
+not part of this app's header) is written **empty** — every other column is
+filled straight from the matching form field.
 
 - Pressing **✅ Submit to Tracker** requires a **Name, Surname and ID Number**
   (entered or extracted) and a selected **Application Type**.
