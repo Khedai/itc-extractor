@@ -149,7 +149,7 @@ Open `js/config.js` and set `recipientEmail`:
 
 ```js
 window.ITC_CONFIG = {
-  recipientEmail: 'reception@kdebt.co.za',  // <-- your address here
+  recipientEmail: 'khuselamanagement@gmail.com',  // <-- your address here
   subject: 'Khusela Credit Application - ITC report',
   fileNamePrefix: 'Khusela-Credit-Application',
 };

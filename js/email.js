@@ -103,6 +103,14 @@
             return resolve({ ok: false, reason: 'refused', msg: 'The email service refused the submission (HTTP ' + res.status + '). Nothing was sent; your draft is still saved in this browser.' });
           }
 
+          // FormSubmit rejects a submission it cannot attribute to a real web
+          // page ("Unable to submit form … open this page through a web
+          // server"). It answers HTTP 200, so without this check the app would
+          // report a send that never happened — a silent "Email sent.".
+          if (/unable to submit form|through a web server/i.test(text)) {
+            return resolve({ ok: false, reason: 'rejected', msg: 'The email service rejected the submission because it could not confirm the page it came from. Nothing was sent — your draft is still saved in this browser. Open the app from its web address (not a file on the disk) and press Submit & Email again.' });
+          }
+
           // FormSubmit's response page tells us when the recipient hasn't
           // clicked the one-time activation link yet ("This form needs
           // Activation."). Until then the PDF is not delivered.
@@ -110,7 +118,7 @@
             return resolve({ ok: false, reason: 'activation', msg: 'The email service sent the recipient a one-time activation notification — the PDF is only delivered after they click its activation link. Click it, then press Submit & Email again. Your draft is still saved.' });
           }
 
-          resolve({ ok: true, msg: 'Email sent to ' + cfg.recipientEmail + '. The filled form is attached as a PDF.' });
+          resolve({ ok: true, msg: 'Email sent.' });
         })
         .catch((err) => {
           clearTimeout(timer);
