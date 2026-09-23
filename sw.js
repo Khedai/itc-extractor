@@ -1,5 +1,5 @@
 // Khusela ITC Extractor — offline-capable service worker (cache-first).
-const CACHE = 'khusela-itc-v22';
+const CACHE = 'khusela-itc-v23';
 const ASSETS = [
   './',
   './index.html',

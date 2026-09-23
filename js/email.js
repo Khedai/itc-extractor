@@ -151,10 +151,7 @@
         try {
           if (frame.contentWindow.location.href === 'about:blank') return;
         } catch (e) { /* cross-origin — the answer page is here */ }
-        finish({
-          ok: true,
-          msg: 'Submitted — the completed application is being emailed to ' + cfg.recipientEmail + ' with the PDF attached.',
-        });
+        finish({ ok: true, msg: 'Submitted.' });
       }
 
       timer = setTimeout(() => finish({
