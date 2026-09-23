@@ -1,83 +1,57 @@
 // PDF generation — renders the application form to a multi-page A4 landscape
 // PDF (matching the wide desktop layout) using html2canvas + jsPDF, then
 // returns the PDF as a Blob. Page breaks are detected from the rendered canvas
-// itself and only ever fall on full-width divider rules, so a page never cuts
-// through a word, a section or a table row, on any device.
+// itself and only ever fall on rows that carry no ink, so a page never cuts
+// through a word, a label, a rule or a table row, on any device.
 (function () {
   'use strict';
 
-  // Find horizontal "safe" rows in the rendered canvas. A cut is safe only when
-  // it lands on a full-width horizontal RULE (a thin dark line spanning nearly
-  // the whole page): section dividers, the navy rule under the header, grid
-  // borders. Table content never qualifies — the loans table's row borders cover
-  // only ~70% of the width and its inputs are borderless white boxes, so a cut
-  // can never slice through a table row. Previously the page ending could land
-  // in the middle of the credit obligations table (rows ~6-7 were clipped); the
-  // algorithm below guarantees cuts only ever occur on such rules.
+  // Rows in the rendered canvas where a page break is SAFE: a row that carries
+  // no ink (no text, no rule) — only thin vertical borders at most. Cutting
+  // there can never slice a word, a label, a rule or a table row. The previous
+  // approach snapped cuts to `.section`/`.footer` tops, but this form has only
+  // one of each, so cuts fell almost anywhere — through the Expenses rows (the
+  // Transport label and field were cut in half between pages 2 and 3).
   //
-  // Because the lines are measured from the canvas itself they are pixel-accurate
-  // on every device (html2canvas always lays the form out at the desktop width,
-  // so the canvas is the single source of truth — DOM rects are NOT: the page's
-  // own media queries put the clone in the mobile layout on phones).
-  function detectBreakLines(canvas, imgH) {
-    const step = 2;                      // sample every 2nd pixel
-    const x0 = Math.floor(canvas.width * 0.05);
-    const x1 = canvas.width - Math.floor(canvas.width * 0.05);
-    const samples = Math.ceil((x1 - x0) / step);
-    const minDark = samples * 0.85;      // ≥85% of the scanned width must be dark
+  // Measured from the canvas itself, so it is correct on every device:
+  // html2canvas always lays the form out at the desktop width, whereas the live
+  // clone follows the page's own media queries — DOM rects are NOT a reliable
+  // source of canvas positions on phones.
+  function blankRows(canvas) {
+    // Work on a downscaled copy: one probe row ≈ one CSS pixel, which is plenty
+    // of resolution to find a whitespace band and keeps the pixel walk cheap on
+    // phones (the full canvas can be 3000 x 3000).
+    const w = Math.min(canvas.width, 1500);
+    const down = w / canvas.width;
+    const h = Math.max(1, Math.round(canvas.height * down));
+    const probe = document.createElement('canvas');
+    probe.width = w;
+    probe.height = h;
+    const ctx = probe.getContext('2d');
+    ctx.drawImage(canvas, 0, 0, w, h);
+    const data = ctx.getImageData(0, 0, w, h).data;
 
-    const ctx = canvas.getContext('2d');
-    const data = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
-
-    // 1) Rows that are "mostly a line" (a rule across the width).
-    const lineRows = [];
-    for (let y = 0; y < canvas.height; y++) {
-      let dark = 0;
-      const base = y * canvas.width;
-      for (let x = x0; x < x1; x += step) {
-        const o = (base + x) * 4;
+    // A row inside a bordered box still carries that box's 1 px vertical edges,
+    // so a few ink pixels are tolerated. Any row holding text or a horizontal
+    // rule blows past the tolerance and is rejected.
+    const inkTolerance = 6;
+    const x0 = Math.floor(w * 0.05);
+    const x1 = w - Math.floor(w * 0.05);
+    const rows = [];
+    for (let y = 0; y < h; y++) {
+      const base = y * w * 4;
+      let ink = 0;
+      for (let x = x0; x < x1; x++) {
+        const o = base + x * 4;
         const lum = 0.299 * data[o] + 0.587 * data[o + 1] + 0.114 * data[o + 2];
-        if (lum < 230) dark++;
+        if (lum < 232) {
+          ink++;
+          if (ink > inkTolerance) break;
+        }
       }
-      if (dark >= minDark) lineRows.push(y);
+      if (ink <= inkTolerance) rows.push(Math.round(y / down));
     }
-
-    // 2) Group adjacent line rows into bands (a rule may be 1-4 px tall).
-    const bands = [];
-    let start = null, prev = null;
-    for (const y of lineRows) {
-      if (start === null) { start = y; prev = y; continue; }
-      if (y - prev > 4) { bands.push(Math.round((start + prev) / 2)); start = y; }
-      prev = y;
-    }
-    if (start !== null) bands.push(Math.round((start + prev) / 2));
-
-    // 3) Keep only ISOLATED thin rules. The navy table-header row is a ~50 px
-    //    solid band, not a divider — its edges are rejected because dark rows
-    //    continue on one side. A real divider has light rows above AND below.
-    const isDarkRow = (y) => {
-      if (y < 0 || y >= canvas.height) return false;
-      let dark = 0, n = 0;
-      const base = y * canvas.width;
-      for (let x = x0; x < x1; x += 4) {
-        const o = (base + x) * 4;
-        const lum = 0.299 * data[o] + 0.587 * data[o + 1] + 0.114 * data[o + 2];
-        if (lum < 230) dark++;
-        n++;
-      }
-      return dark / n > 0.5;
-    };
-    const rules = bands.filter((y) => {
-      let above = 0, below = 0;
-      for (let d = 5; d <= 14; d++) {
-        if (isDarkRow(y - d)) above++;
-        if (isDarkRow(y + d)) below++;
-      }
-      return above <= 1 && below <= 1;
-    });
-
-    // Cut 3 px below each rule so the rule stays with the content above it.
-    return rules.map((y) => Math.min(y + 3, imgH - 1)).filter((y) => y > 1 && y < imgH - 2);
+    return rows;
   }
 
   // opts: { scale, quality } — lower both to shrink the output when it would
@@ -92,7 +66,7 @@
 
     // The form is designed for a wide desktop layout. Rendering a hidden clone
     // at this fixed width keeps phone/desktop PDFs identical and matches the
-    // canvas html2canvas produces (see detectBreakLines).
+    // canvas html2canvas produces (see blankRows).
     const PDF_LAYOUT_WIDTH = 1500;
 
     const clone = elm.cloneNode(true);
@@ -159,34 +133,45 @@
         return pdf.output('blob');
       }
 
-      // If the form spans multiple pages, gather section-level safe break points
-      // from the DOM rects so a page NEVER slices through a section, table or signature.
-      const rect = clone.getBoundingClientRect();
-      const sectionTops = [];
-      clone.querySelectorAll('.section, .footer').forEach((el) => {
-        const y = (el.getBoundingClientRect().top - rect.top) * scale;
-        if (y > 10 && y < imgH - 10) sectionTops.push(Math.round(y));
-      });
-      sectionTops.sort((a, b) => a - b);
+      // Multi-page: break ONLY on canvas rows that carry no ink (see blankRows).
+      const safeRows = blankRows(canvas);
 
+      const cuts = [];
       let cursor = 0;
       let pageNo = 0;
       while (cursor < imgH - 1) {
-        let cut = Math.min(cursor + pageHeightPx, imgH);
-        if (cut < imgH) {
-          // Snap the cut to the last section top before the page boundary
-          let snapped = null;
-          for (const y of sectionTops) {
-            if (y > cursor + 50 && y <= cut) snapped = y;
+        const limit = Math.min(cursor + pageHeightPx, imgH);
+        let cut = limit;
+
+        if (limit < imgH) {
+          // Prefer the deepest safe row that still fills most of the page, so
+          // pages stay full and no row of content is ever sliced. Fall back to
+          // a safe row that fills at least a quarter of the page, and only to
+          // the raw page boundary if the canvas offers nothing safe at all.
+          const minFull = cursor + Math.round(pageHeightPx * 0.7);
+          const minSome = cursor + Math.round(pageHeightPx * 0.25);
+          let deepest = 0;
+          let deepestFull = 0;
+          for (const y of safeRows) {
+            if (y > limit) break;
+            if (y <= cursor + 4) continue;
+            if (y >= minSome) deepest = y;
+            if (y >= minFull) deepestFull = y;
           }
-          if (snapped !== null) cut = snapped;
+          if (deepestFull) cut = deepestFull;
+          else if (deepest) cut = deepest;
         }
 
+        cuts.push(cut);
         if (pageNo > 0) pdf.addPage();
         pdf.addImage(img, 'JPEG', 0, -cursor * mmPerPx, pageW, imgH * mmPerPx);
         cursor = cut;
         pageNo += 1;
       }
+
+      // Diagnostics (also used by the pagination regression test): the canvas
+      // row each page break landed on.
+      window.ITCPdf.lastCutRows = cuts;
 
       return pdf.output('blob');
     } finally {
