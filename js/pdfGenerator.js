@@ -105,12 +105,20 @@
     clone.setAttribute('aria-hidden', 'true');
     document.body.appendChild(clone);
 
-    // Carry over the current field values into the clone.
+    // Carry over the current field values into the clone. File inputs are
+    // skipped: their value is a fake path ("C:\fakepath\…") and the DOM only
+    // allows clearing it — assigning a non-empty value throws
+    // ("This input element accepts a filename, which may only be
+    // programmatically set to the empty string"), which used to break EVERY
+    // submit once an ITC report had been chosen (the ITC upload lives inside
+    // #formPage). The order of the remaining fields is unchanged, so the
+    // src/dst pairing below stays valid.
     const srcFields = elm.querySelectorAll('input, select, textarea');
     const dstFields = clone.querySelectorAll('input, select, textarea');
     srcFields.forEach((src, i) => {
       const dst = dstFields[i];
       if (!dst) return;
+      if (src.type === 'file' || dst.type === 'file') return;
       if (dst.type === 'checkbox' || dst.type === 'radio') dst.checked = !!src.checked;
       else dst.value = src.value;
     });

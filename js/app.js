@@ -161,8 +161,10 @@
   // Serialise every editable form field by its name attribute (readonly review
   // values and the ITC upload/password controls are derived/chrome — excluded).
   function draftFields() {
+    // File inputs are excluded: their value is a fake path that can only ever be
+    // cleared, so saving or restoring one would throw and break the draft.
     return Array.from(document.querySelectorAll('#formPage input, #formPage select, #formPage textarea'))
-      .filter((el) => el.name && !el.readOnly && !el.closest('.itc-panel'));
+      .filter((el) => el.name && !el.readOnly && el.type !== 'file' && !el.closest('.itc-panel'));
   }
 
   function saveDraft() {
