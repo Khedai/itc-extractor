@@ -15,18 +15,24 @@
 //    address. We set the applicant's address via "_replyto" / an "email" field
 //    so replying to the notification goes straight back to the applicant.
 //
-// Transport: we POST multipart/form-data to FormSubmit's STANDARD endpoint
-// (https://formsubmit.co/…) with fetch(). The standard endpoint is the one that
-// accepts file uploads — the /ajax/ endpoint silently drops attachments — and
-// it sends CORS headers, so the browser can deliver the PDF and read the
-// response page (which also reports an un-activated form). No hidden iframe.
+// Transport: the PDF is posted by a REAL hidden <form> (in index.html:
+// #emailForm → #emailFrame) with enctype="multipart/form-data" and a real file
+// input named "attachment". FormSubmit keeps uploaded files only for a genuine
+// form POST (a navigation) — a fetch()/XHR post is treated as AJAX: the email
+// still arrives, but the PDF is silently dropped. Do NOT change this back to
+// fetch() + FormData; that is exactly what lost the attachment before.
+//
+// Because the reply lands in a hidden cross-origin iframe, FormSubmit's answer
+// page cannot be read. We can tell that FormSubmit replied (the frame navigates
+// away from about:blank) but not whether it was the "Thanks" page or the
+// "needs activation" page, so the success message stays deliberately plain.
 (function () {
   'use strict';
 
   // FormSubmit hard limit for the sum of all uploaded files.
   const MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024;
   // Generous timeout: the PDF is a few MB and can take a while over mobile data.
-  const SEND_TIMEOUT_MS = 60000;
+  const UPLOAD_TIMEOUT_MS = 120000;
 
   function readApplicant() {
     const get = (id) => {
@@ -59,74 +65,106 @@
         return fail('file_protocol', 'This page is open directly from the disk (file://). Serve it over http:// or https:// — FormSubmit rejects file:// pages. Nothing was sent; your draft is still saved in this browser.');
       }
 
-      const fd = new FormData();
-      const add = (name, value) => { if (value) fd.append(name, value); };
+      // One hidden <form> per submission: the PDF must travel as a real file on
+      // a real form post — the only transport FormSubmit keeps the attachment
+      // for (see the transport note at the top of this file).
+      const form = document.getElementById('emailForm');
+      const frame = document.getElementById('emailFrame');
+      if (!form || !frame) {
+        return fail('no_transport', 'The email form is missing from the page. Nothing was sent — your draft is still saved in this browser.');
+      }
+
+      // The generated PDF has to become a real File for the file input.
+      let file = null;
+      try {
+        file = new File([blob], filename, { type: 'application/pdf' });
+      } catch (e) {
+        file = null;
+      }
+      if (!file) {
+        return fail('no_file_api', 'This browser cannot build the PDF attachment. Nothing was sent — your draft is still saved in this browser. Open the app in a current version of Chrome, Edge or Safari and try again.');
+      }
+
+      form.innerHTML = '';
+      form.action = 'https://formsubmit.co/' + encodeURIComponent(cfg.recipientEmail);
+      form.method = 'POST';
+      form.enctype = 'multipart/form-data';   // required — FormSubmit drops files without it
+      form.target = frame.name || 'emailFrame';
+
+      const add = (name, value) => {
+        if (!value) return;
+        const input = document.createElement('input');
+        input.type = 'hidden';
+        input.name = name;
+        input.value = value;
+        form.appendChild(input);
+      };
 
       add('_subject', cfg.subject || 'Khusela Credit Application - ITC report');
-      fd.append('_template', 'table');   // readable table layout in the email body
-      fd.append('_captcha', 'false');
-      add('_url', location.href);        // helps FormSubmit record where the submission came from
+      add('_template', 'table');   // readable table layout in the email body
+      add('_captcha', 'false');    // a send driven from JS cannot solve a reCAPTCHA
+      add('_url', location.href);  // FormSubmit needs to know which page posted
 
       // Applicant details in the body make the notification email useful, and
       // the "email"/"_replyto" fields let the recipient reply straight to the
       // applicant (FormSubmit cannot customise "From").
       const applicant = readApplicant();
       if (applicant.email) {
-        fd.append('email', applicant.email);
-        fd.append('_replyto', applicant.email);
+        add('email', applicant.email);
+        add('_replyto', applicant.email);
       }
-      if (applicant.name) fd.append('Applicant', applicant.name);
-      if (applicant.id) fd.append('ID Number', applicant.id);
-      if (applicant.date) fd.append('Date', applicant.date);
+      add('Applicant', applicant.name);
+      add('ID Number', applicant.id);
+      add('Date', applicant.date);
 
-      // Attach the generated PDF — the field MUST be named "attachment". This is
-      // posted to the STANDARD endpoint (the one FormSubmit documents for file
-      // uploads); the /ajax/ endpoint silently drops attachments. The standard
-      // endpoint sends CORS headers, so a normal fetch delivers the file and
-      // lets us read the response page back.
-      fd.append('attachment', blob, filename);
+      // The attachment itself — the field MUST be named "attachment".
+      const fileInput = document.createElement('input');
+      fileInput.type = 'file';
+      fileInput.name = 'attachment';
+      try {
+        const dt = new DataTransfer();
+        dt.items.add(file);
+        fileInput.files = dt.files;   // programmatic .files is the only way to send a generated file
+      } catch (e) {
+        return fail('no_file_api', 'This browser cannot attach the PDF to the email. Nothing was sent — your draft is still saved in this browser. Open the app in a current version of Chrome, Edge or Safari and try again.');
+      }
+      form.appendChild(fileInput);
 
-      const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), SEND_TIMEOUT_MS);
+      let settled = false;
+      let timer = null;
 
-      fetch('https://formsubmit.co/' + encodeURIComponent(cfg.recipientEmail), {
-        method: 'POST',
-        body: fd,
-        signal: controller.signal,
-      })
-        .then(async (res) => {
-          clearTimeout(timer);
-          let text = '';
-          try { text = await res.text(); } catch (e) { text = ''; }
+      const cleanup = () => {
+        clearTimeout(timer);
+        frame.removeEventListener('load', onLoad);
+      };
+      const finish = (result) => {
+        if (settled) return;
+        settled = true;
+        cleanup();
+        resolve(result);
+      };
 
-          if (res.status !== 200) {
-            return resolve({ ok: false, reason: 'refused', msg: 'The email service refused the submission (HTTP ' + res.status + '). Nothing was sent; your draft is still saved in this browser.' });
-          }
-
-          // FormSubmit rejects a submission it cannot attribute to a real web
-          // page ("Unable to submit form … open this page through a web
-          // server"). It answers HTTP 200, so without this check the app would
-          // report a send that never happened — a silent "Email sent.".
-          if (/unable to submit form|through a web server/i.test(text)) {
-            return resolve({ ok: false, reason: 'rejected', msg: 'The email service rejected the submission because it could not confirm the page it came from. Nothing was sent — your draft is still saved in this browser. Open the app from its web address (not a file on the disk) and press Submit & Email again.' });
-          }
-
-          // FormSubmit's response page tells us when the recipient hasn't
-          // clicked the one-time activation link yet ("This form needs
-          // Activation."). Until then the PDF is not delivered.
-          if (/this form needs activ|activate form|activation link/i.test(text)) {
-            return resolve({ ok: false, reason: 'activation', msg: 'The email service sent the recipient a one-time activation notification — the PDF is only delivered after they click its activation link. Click it, then press Submit & Email again. Your draft is still saved.' });
-          }
-
-          resolve({ ok: true, msg: 'Email sent.' });
-        })
-        .catch((err) => {
-          clearTimeout(timer);
-          if (err && err.name === 'AbortError') {
-            return resolve({ ok: false, reason: 'timeout', msg: 'Timed out contacting the email service — the PDF is large and mobile uploads can be slow. Nothing was confirmed sent; your draft is still saved. Try again if the email does not arrive.' });
-          }
-          resolve({ ok: false, reason: 'network', msg: 'Could not contact the email service (' + (err && err.message ? err.message : 'network error') + '). Nothing was sent — your draft is still saved in this browser. Check your connection and try again.' });
+      // FormSubmit's answer page is cross-origin, so it cannot be read. A `load`
+      // event whose document is no longer about:blank does prove that FormSubmit
+      // answered the post — i.e. the upload finished.
+      function onLoad() {
+        try {
+          if (frame.contentWindow.location.href === 'about:blank') return;
+        } catch (e) { /* cross-origin — the answer page is here */ }
+        finish({
+          ok: true,
+          msg: 'Submitted — the completed application is being emailed to ' + cfg.recipientEmail + ' with the PDF attached.',
         });
+      }
+
+      timer = setTimeout(() => finish({
+        ok: false,
+        reason: 'timeout',
+        msg: 'The upload to the email service did not finish in time — a few MB over mobile data can take a while. Your draft is still saved; check with the office before sending again.',
+      }), UPLOAD_TIMEOUT_MS);
+
+      frame.addEventListener('load', onLoad);
+      form.submit();
     });
   }
 

@@ -160,6 +160,19 @@ from any static host. The filled form is attached to the email as a **PDF**
 (field `attachment`, up to FormSubmit's 10 MB limit; the app auto-compresses
 the PDF and re-sends if it ever gets too large).
 
+### The PDF is posted as a real form — never switch this to fetch()
+
+`js/email.js` submits the hidden form that lives in `index.html` (`#emailForm` →
+`#emailFrame`, `enctype="multipart/form-data"`, with a real file input named
+`attachment`), so the browser performs a **genuine form POST**. FormSubmit keeps
+uploaded files **only** for a real form post: a `fetch()`/XHR submission is
+treated as AJAX — the notification email still arrives, **but the PDF is
+silently dropped** (and its docs advertise no file support on `/ajax/` at all).
+This trap was fallen into twice in this project's history, so the transport is
+deliberately a plain form. Consequence: FormSubmit's reply renders inside the
+hidden frame and cannot be read, so the success message is plain rather than
+reporting the form's activation state.
+
 ### First send = activation (why you may only see a "form submission" notification)
 
 The **first** submission to a new recipient address does **not** deliver the
@@ -173,7 +186,7 @@ activation email — click its link, then press **Submit & Email** again.
 
 FormSubmit sends from its own generic address — the sender **cannot** be
 customised with this service. The app sets **Reply-To** to the applicant's email
-address (field `fEmail`), so replying to the notification in your mail client
+address (field `email` / `_replyto`), so replying to the notification in your mail client
 goes straight back to the applicant. The email body also lists the applicant's
 name, ID number and date so the notification itself is useful.
 
