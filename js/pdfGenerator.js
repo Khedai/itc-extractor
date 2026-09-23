@@ -31,25 +31,39 @@
     ctx.drawImage(canvas, 0, 0, w, h);
     const data = ctx.getImageData(0, 0, w, h).data;
 
-    // A row inside a bordered box still carries that box's 1 px vertical edges,
-    // so a few ink pixels are tolerated. Any row holding text or a horizontal
-    // rule blows past the tolerance and is rejected.
+    // A row is a safe cut when it carries NO ink, or when its few ink pixels are
+    // not part of a vertical line running through it. Ink that continues above
+    // and below belongs to a box border (an input, the consent box, a table
+    // cell), and cutting there splits that box — the sliced-field look this
+    // function exists to prevent.
     const inkTolerance = 6;
     const x0 = Math.floor(w * 0.05);
     const x1 = w - Math.floor(w * 0.05);
+    const inkAt = (x, y) => {
+      if (y < 0 || y >= h || x < 0 || x >= w) return false;
+      const o = (y * w + x) * 4;
+      return (0.299 * data[o] + 0.587 * data[o + 1] + 0.114 * data[o + 2]) < 232;
+    };
+
     const rows = [];
     for (let y = 0; y < h; y++) {
-      const base = y * w * 4;
-      let ink = 0;
+      const inkCols = [];
       for (let x = x0; x < x1; x++) {
-        const o = base + x * 4;
-        const lum = 0.299 * data[o] + 0.587 * data[o + 1] + 0.114 * data[o + 2];
-        if (lum < 232) {
-          ink++;
-          if (ink > inkTolerance) break;
+        if (inkAt(x, y)) {
+          inkCols.push(x);
+          if (inkCols.length > inkTolerance) break;
         }
       }
-      if (ink <= inkTolerance) rows.push(Math.round(y / down));
+      if (inkCols.length > inkTolerance) continue;
+
+      if (inkCols.length) {
+        let continued = 0;
+        for (const x of inkCols) {
+          if (inkAt(x, y - 4) && inkAt(x, y + 4)) continued++;
+        }
+        if (continued) continue;
+      }
+      rows.push(Math.round(y / down));
     }
     return rows;
   }
@@ -119,7 +133,6 @@
       const pageW = pdf.internal.pageSize.getWidth();   // 297 mm
       const pageH = pdf.internal.pageSize.getHeight();  // 210 mm
 
-      const img = canvas.toDataURL('image/jpeg', quality);
       const imgW = canvas.width;
       const imgH = canvas.height;
       const mmPerPx = pageW / imgW;              // one canvas pixel, in mm
@@ -129,7 +142,7 @@
       // render it directly as a clean single-page PDF with no page splits.
       if (imgH <= pageHeightPx * 1.08) {
         const renderH = Math.min(pageH, (imgH / imgW) * pageW);
-        pdf.addImage(img, 'JPEG', 0, 0, pageW, renderH);
+        pdf.addImage(canvas.toDataURL('image/jpeg', quality), 'JPEG', 0, 0, pageW, renderH);
         return pdf.output('blob');
       }
 
@@ -163,15 +176,27 @@
         }
 
         cuts.push(cut);
+
+        // Draw ONLY this page's slice — never the whole render shifted up.
+        // Shifting the full image left the content between the cut and the
+        // page's bottom edge visible at the bottom of the page, and it showed
+        // again at the top of the next page — that duplicated the Loans And
+        // Accounts block whenever a cut landed above the page's bottom edge.
+        const sliceH = cut - cursor;
+        const slice = document.createElement('canvas');
+        slice.width = imgW;
+        slice.height = sliceH;
+        slice.getContext('2d').drawImage(canvas, 0, cursor, imgW, sliceH, 0, 0, imgW, sliceH);
+
         if (pageNo > 0) pdf.addPage();
-        pdf.addImage(img, 'JPEG', 0, -cursor * mmPerPx, pageW, imgH * mmPerPx);
+        pdf.addImage(slice.toDataURL('image/jpeg', quality), 'JPEG', 0, 0, pageW, sliceH * mmPerPx);
         cursor = cut;
         pageNo += 1;
       }
 
-      // Diagnostics (also used by the pagination regression test): the canvas
-      // row each page break landed on.
-      window.ITCPdf.lastCutRows = cuts;
+      // Diagnostics (also used by the pagination regression test): the render
+      // size, the page capacity and the canvas row each break landed on.
+      window.ITCPdf.lastPageInfo = { imgW: imgW, imgH: imgH, pageHeightPx: pageHeightPx, cuts: cuts };
 
       return pdf.output('blob');
     } finally {
