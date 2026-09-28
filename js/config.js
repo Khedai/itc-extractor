@@ -6,10 +6,14 @@ window.ITC_CONFIG = {
   subject: 'Khusela Credit Application - ITC report',
   fileNamePrefix: 'Khusela-Credit-Application',
   // Base URL of the Khusela signature backend (khusela-backend), with no
-  // trailing slash — e.g. 'https://khusela-signature.example.com'. While this
-  // is empty the application works exactly as before: the Signature section
-  // stays a plain pair of boxes and no signing requests can be sent. Ask the
-  // backend's host for the URL, and add this site's address to the backend's
-  // ALLOWED_ORIGINS so the requests are accepted.
-  signatureApiBase: '',
+  // trailing slash — the Render service created for this PWA. While this is
+  // empty the application works exactly as before: the Signature section stays
+  // a plain pair of boxes and no signing requests can be sent. This site's
+  // address (https://itc-extractor.vercel.app) is already in the backend's
+  // ALLOWED_ORIGINS, so the requests below are accepted from here.
+  //
+  // The free Render instance sleeps after ~15 minutes idle and takes up to a
+  // minute to wake; js/signature.js wakes it with a repeated /health read
+  // before the first write, then sends that write exactly once.
+  signatureApiBase: 'https://khusela-signature-backend.onrender.com',
 };
