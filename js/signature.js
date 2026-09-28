@@ -34,6 +34,12 @@
   const POLL_MS = 20000;
   // A request that never answers must not freeze the submit path (refreshAll).
   const REQUEST_TIMEOUT_MS = 12000;
+  // The backend's free plan sleeps after about 15 minutes idle and can take a
+  // minute to wake, which is longer than a click can afford to wait. A read may
+  // be repeated, so the service is woken with one before the first write of a
+  // session; the write itself is sent exactly once, because a repeated invite
+  // would leave a second invitation behind that nobody ever saw.
+  const WAKE_TIMEOUT_MS = 75000;
 
   const SLOTS = [
     { n: 1, label: 'Applicant 1' },
@@ -73,9 +79,11 @@
     });
   }
 
-  async function api(pathname, opts) {
+  // One attempt, with its own deadline: kept separate so the wait for a sleeping
+  // service can differ from the wait for a normal reply.
+  async function once(pathname, opts, timeoutMs) {
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
     try {
       const res = await fetch(base() + pathname, Object.assign({ signal: controller.signal }, opts || {}));
       let data = null;
@@ -83,6 +91,40 @@
       if (!res.ok) {
         throw new Error((data && data.error) || ('The signature service replied with ' + res.status + '.'));
       }
+      return data;
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
+  // Set once this session has heard from the service, which means it is awake.
+  let awake = false;
+
+  // The first request of the session is what wakes a sleeping instance, so ask
+  // /health and let it wait. It is a plain read: repeating it costs nothing, and a
+  // failure here is not reported because the caller's own request says what is
+  // wrong with the address or the connection. On a slow wake the caller is told,
+  // so a box that sits quiet for a minute explains itself.
+  async function wake(onSlow) {
+    if (awake || !enabled()) return;
+    const slow = setTimeout(() => { if (onSlow) onSlow(); }, 3000);
+    try {
+      await once('/health', { method: 'GET' }, WAKE_TIMEOUT_MS);
+      awake = true;
+    } catch (e) {
+      // Left asleep: whatever is wrong, the request that follows will report it.
+    } finally {
+      clearTimeout(slow);
+    }
+  }
+
+  async function api(pathname, opts, onSlow) {
+    // A read can simply be tried again by the caller, so only a write needs the
+    // service awake beforehand.
+    if (String((opts || {}).method || 'GET').toUpperCase() !== 'GET') await wake(onSlow);
+    try {
+      const data = await once(pathname, opts, REQUEST_TIMEOUT_MS);
+      awake = true;
       return data;
     } catch (e) {
       if (e && e.name === 'AbortError') {
@@ -92,8 +134,6 @@
         throw new Error('Could not reach the signature service. Check signatureApiBase in js/config.js.');
       }
       throw e;
-    } finally {
-      clearTimeout(timer);
     }
   }
 
@@ -188,6 +228,9 @@
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(Object.assign({}, details, { signerLabel: slot.label })),
+      }, () => {
+        // The first click after a quiet spell may have to wake a sleeping instance.
+        note(n, 'Waking the signing service — this can take up to a minute…');
       });
 
       state[n] = {
