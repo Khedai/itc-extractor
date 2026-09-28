@@ -173,7 +173,26 @@
         </div>
         <div class="signature">
           <div class="section-title">Signature:</div>
-          <div class="two"><div><div class="sigbox"></div><center>Applicant 1</center></div><div><div class="sigbox"></div><center>Applicant 2</center></div></div>
+          <div class="two">
+            <div class="sig-cell">
+              <div class="sigbox" id="sigbox1"><img id="sigimg1" alt="Signature of Applicant 1" hidden></div>
+              <center>Applicant 1</center>
+              <div class="sig-chrome">
+                <button type="button" class="btn sig-btn" id="sigSend1">Send Signing Link</button>
+                <button type="button" class="btn secondary sig-btn" id="sigCopy1" hidden>Copy Link</button>
+                <div class="sig-note" id="sigNote1"></div>
+              </div>
+            </div>
+            <div class="sig-cell">
+              <div class="sigbox" id="sigbox2"><img id="sigimg2" alt="Signature of Applicant 2" hidden></div>
+              <center>Applicant 2</center>
+              <div class="sig-chrome">
+                <button type="button" class="btn sig-btn" id="sigSend2">Send Signing Link</button>
+                <button type="button" class="btn secondary sig-btn" id="sigCopy2" hidden>Copy Link</button>
+                <div class="sig-note" id="sigNote2"></div>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -225,6 +244,7 @@
   <script src="js/pdfGenerator.js"></script>
   <script src="js/email.js"></script>
   <script src="js/tracker.js"></script>
+  <script src="js/signature.js"></script>
   <script src="js/app.js"></script>
 </body>
 </html>

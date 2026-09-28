@@ -111,10 +111,12 @@
       else dst.value = src.value;
     });
 
-    // App chrome inside the page (ITC upload panel + ITC report-details review)
-    // must never appear in the emailed document — the original's PDF captures
-    // only the application form sections.
-    clone.querySelectorAll('.itc-panel, .itc-review').forEach((node) => {
+    // App chrome inside the page must never appear in the emailed document —
+    // the original's PDF captures only the application form sections. The
+    // signature request buttons/notes (.sig-chrome) are chrome too; a captured
+    // signature is an <img> inside .sigbox and IS part of the signed form, so it
+    // is deliberately kept.
+    clone.querySelectorAll('.itc-panel, .itc-review, .sig-chrome').forEach((node) => {
       if (node.parentNode) node.parentNode.removeChild(node);
     });
 

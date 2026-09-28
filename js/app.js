@@ -315,6 +315,12 @@
     btn.textContent = 'Preparing PDF…';
     showSending('Preparing your PDF…', 'Rendering the application form');
     try {
+      // A signature captured since the last background poll must be inside the
+      // PDF being sent, so pull the latest status first (never blocks sending:
+      // refreshAll swallows its own errors).
+      if (window.ITCSignature && window.ITCSignature.refreshAll) {
+        try { await window.ITCSignature.refreshAll(); } catch (e) {}
+      }
       let blob = await generatePdf();
       if (blob.size > MAX_ATTACH_BYTES) {
         btn.textContent = 'Compressing PDF…';
@@ -364,6 +370,8 @@
     $('itcFile').value = '';
     $('itcPassword').value = '';
     try { localStorage.removeItem(DRAFT_KEY); } catch (e) {}
+    // Pending / captured signature requests belong to the application being cleared.
+    if (window.ITCSignature && window.ITCSignature.clear) window.ITCSignature.clear();
     calc();
     setStatus('ok', 'Form and saved draft cleared. Upload a Datanamix ITC PDF to fill it automatically.');
     hideResult();

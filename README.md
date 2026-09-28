@@ -14,8 +14,14 @@ A standalone, installable web app that:
    (browser `localStorage`) with the full 35-column tracker layout, and the
    updated tracker downloads as `Khusela_Sales_Tracker.csv`. **Export
    Tracker** re-downloads that CSV without adding a row (see below).
+5. **Collects a signature remotely** (optional) — **Send Signing Link** under
+   Applicant 1 or 2 creates a secure one-time link, the client signs on their own
+   device, and the captured signature appears in that box and in the PDF (see
+   [Signature requests](#signature-requests-remote-signing)).
 
 All libraries are vendored locally (`vendor/`) so the app works fully offline.
+Only the optional remote-signing feature needs a network connection beyond
+sending the email — and only once you point it at a backend.
 
 ---
 
@@ -40,7 +46,9 @@ Then open <http://localhost:8080>.
 1. **Extract** — click the panel's file picker, choose the Datanamix ITC PDF,
    enter the report's password if it's protected, and click
    **Extract ITC Report**.
-2. **Complete** — fill the manual fields (income, expenses, docs, signatures).
+2. **Complete** — fill the manual fields (income, expenses, docs) and, if the
+   client is signing remotely, send a signature request (see
+   [Signature requests](#signature-requests-remote-signing)).
 3. **Submit** — click **Submit & Email**. The form is rendered to a multi-page
    A4 PDF and sent to the configured address.
 4. **Track** — press **✅ Submit to Tracker**. The application is appended to
@@ -124,14 +132,63 @@ filled straight from the matching form field.
   leaves the device except as the CSV you choose to download.
 
 
+## Signature requests (remote signing)
+
+The **Signature** section (Applicant 1 / Applicant 2) keeps the original Khusela
+layout. Two small buttons appear under each box **only when a signature service
+has been configured** — with `signatureApiBase` left empty the section behaves
+exactly as it always has and nothing is ever sent.
+
+1. Point the app at the backend in `js/config.js` (see
+   [Configure the email recipient](#configure-the-email-recipient)):
+
+   ```js
+   signatureApiBase: 'https://api.your-domain.co.za',   // <-- here
+   ```
+
+   The backend is the `khusela-backend` project. Add this site's exact address to
+   its `ALLOWED_ORIGINS`, otherwise the browser blocks the requests.
+
+2. With the applicant's **Name, Surname and ID Number** filled in, press **Send
+   Signing Link** under the matching box. A secure, one-time, expiring link is
+   created and copied to the clipboard.
+3. Send that link to the applicant — WhatsApp, SMS or e-mail. They open it on
+   their own phone, draw their signature with a finger and submit it.
+4. This app polls for the result every 20 seconds. As soon as the signature
+   arrives it is drawn inside that applicant's box (green border), and it is
+   included in the PDF the next time you press **Submit & Email**.
+
+Notes:
+
+- **Applicant 1 and Applicant 2 are independent** — each box owns its own link
+  and its own status line ("Waiting for the signature…", "Signed …", or "That
+  link expired before it was signed").
+- **Two separate secrets** are involved. The link you send is one-time and
+  expiring; the token that lets *this* device read the signature back stays on
+  this device and must never be shared with the client.
+- Pending requests are remembered in this browser alongside the draft, so a
+  signature that arrives after you close the page is picked up next time.
+  **New Application** clears them.
+- The buttons and the status lines are **never** in the PDF or the printed form —
+  only the captured signature is.
+- The link is **not sent automatically**. It is copied so the consultant can
+  deliver it however suits that client.
+- If the request fails (backend down, address wrong) the box shows a short error
+  and nothing else about the application is affected.
+
 ## Where are drafts saved?
 
 Drafts are **autosaved to the browser's `localStorage` on the device you're
 using** — they never leave that device:
 
-- **Not uploaded** — no network request ever carries the form data (except the
-  PDF itself when you press **Submit & Email**).
-- **Not stored on any server** — there is no backend and no database.
+- **Not uploaded** — no network request ever carries the form data, except the
+  PDF itself when you press **Submit & Email** and the applicant's name/ID when
+  you press **Send Signing Link** (see
+  [Signature requests](#signature-requests-remote-signing)).
+- **Not stored on any server** — the form itself has no backend and no database.
+  The only server ever involved is the optional signature service, and it
+  receives **only** the applicant's name, ID and contact details needed for their
+  signing request — never the rest of the application.
 - **Not downloadable as a draft** — the form itself is never offered as a
   download; the only file output is the tracker CSV from **Submit to Tracker** /
   **Export Tracker**. Those rows stay in this browser until you save the
@@ -152,6 +209,7 @@ window.ITC_CONFIG = {
   recipientEmail: 'khuselamanagement@gmail.com',  // <-- your address here
   subject: 'Khusela Credit Application - ITC report',
   fileNamePrefix: 'Khusela-Credit-Application',
+  signatureApiBase: '',  // optional remote signing — see "Signature requests"
 };
 ```
 
@@ -247,6 +305,7 @@ khusela-itc-pwa/
 │   ├── pdfGenerator.js # form → A4 PDF (html2canvas + jsPDF)
 │   ├── email.js        # FormSubmit email send (no download)
 │   ├── tracker.js      # Khusela Sales Tracker (browser CSV tracker)
+│   ├── signature.js    # remote signing requests (link, status, signature)
 │   └── app.js          # wiring: extract, fill, submit, reset
 ├── vendor/             # pdf.js, html2canvas, jsPDF (offline)
 ├── icons/              # PWA icons (regenerate: powershell tools/make_icons.ps1)
@@ -278,8 +337,9 @@ node tools/test_tracker_node.js
 ## Security notes
 
 - The app runs entirely in the browser; extracted data never leaves the device
-  except when you submit (PDF → email service) or when you export the tracker
-  CSV (**Submit to Tracker** / **Export Tracker**).
+  except when you submit (PDF → email service), when you export the tracker CSV
+  (**Submit to Tracker** / **Export Tracker**), or when you send a signing
+  request (**Send Signing Link** → applicant name, ID and contact details only).
 - Drafts are stored **only** in the browser's `localStorage` on the device that
   created them — never on a server, never in git.
 - Datanamix reports contain personal data — host this app somewhere you

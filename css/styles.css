@@ -69,6 +69,16 @@ td input,td select{border:0;height:25px;padding:3px}
 .debit .amount input{font-weight:800;color:var(--red);font-size:15px}
 .signature{border:1px solid var(--line);padding:8px}
 .sigbox{height:55px;border:1px solid #aaa;margin-top:5px}
+/* Remote signature request — the box itself is unchanged; the captured
+   signature is drawn inside it and the chrome under the label drives it. */
+.sigbox img{display:block;width:100%;height:100%;object-fit:contain}
+.sigbox img[hidden]{display:none}
+.sigbox.signed{border-color:#2e7d32;background:#f6fff8}
+.sig-chrome{margin-top:5px;display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.sig-btn{padding:5px 9px;font-size:11px;border-radius:3px}
+.sig-note{flex:1 1 100%;font-size:11px;line-height:1.3;color:#555;word-break:break-word}
+.sig-note.ok{color:#145c2e}
+.sig-note.err{color:#8a1111}
 .expense-consent{display:grid;grid-template-columns:1fr 2fr;border-top:1px solid var(--line)}
 .expenses{padding:6px 9px;border-right:1px solid var(--line)}
 .expenses .field{grid-template-columns:145px 1fr}
@@ -150,7 +160,7 @@ td input,td select{border:0;height:25px;padding:3px}
 
 /* ── Print — only the application form prints (panels/toolbar hidden) ──── */
 @media print{
-.toolbar,.draft-note,.itc-panel,.itc-review,.result-panel{display:none}
+.toolbar,.draft-note,.itc-panel,.itc-review,.result-panel,.sig-chrome{display:none}
 body{background:#fff}
 .page{width:100%;margin:0;box-shadow:none}
 }
