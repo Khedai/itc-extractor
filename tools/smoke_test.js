@@ -19,7 +19,54 @@ if (missing.length) {
 }
 console.log('Referenced assets OK (' + refs.length + ' references)');
 
-// Static server smoke test
+// ── Editable-field check ───────────────────────────────────────────────────
+// The ITC review panel is filled in by hand when the consultant has no Datanamix
+// report to extract (those boxes used to be readonly, so every keystroke was
+// silently swallowed and "I can't put my name and details in to test" was the
+// only thing the page did about it), and the applicant fields the signing link
+// is built from must stay typeable. Plain assertions — this file has no deps.
+let domFail = 0;
+function check(label, actual, expected) {
+  const ok = actual === expected;
+  if (!ok) domFail++;
+  console.log((ok ? 'PASS  ' : 'FAIL  ') + label +
+    (ok ? '' : ' — got ' + JSON.stringify(actual) + ', expected ' + JSON.stringify(expected)));
+}
+
+function tagFor(id) {
+  return (html.match(new RegExp('<input\\b[^>]*\\bid="' + id + '"[^>]*>')) || [''])[0];
+}
+
+const REVIEW_IDS = [
+  'itcReportRefView', 'itcSearchDateView', 'itcSecondNameView', 'itcMaidenView',
+  'itcTitleView', 'itcGenderView', 'itcBirthView', 'itcHomeView', 'itcWorkView',
+  'itcPostalView', 'itcScoreView', 'itcRiskView', 'itcDebtReviewView',
+  'itcTotalInstView', 'itcTotalDebtView', 'itcTotalArrearsView',
+];
+check('the review panel still has all 16 boxes',
+  REVIEW_IDS.filter((id) => tagFor(id)).length, 16);
+check('no review box is readonly or disabled',
+  REVIEW_IDS.filter((id) => /readonly|disabled/.test(tagFor(id))).join(','), '');
+check('the on-screen-only hint is shown to the user', /class="itc-hint"/.test(html), true);
+
+// The fields a signing link is built from (js/signature.js clientDetails()).
+['name', 'surname', 'id', 'cell', 'whatsapp', 'email'].forEach((id) => {
+  const tag = tagFor(id);
+  check('"' + id + '" exists', tag.length > 0, true);
+  check('"' + id + '" is editable', /readonly|disabled/.test(tag), false);
+});
+
+// Only the two genuinely derived totals may stay locked out of every input on
+// the page (the loans "reduced instalment" column is derived too, but it is
+// built in js/app.js, not here).
+const lockedIds = [...html.matchAll(/<input\b[^>]*>/g)]
+  .filter((m) => /\sreadonly(?=[\s>])/.test(m[0]))
+  .map((m) => (m[0].match(/\bid="([^"]+)"/) || [null, '(no id)'])[1])
+  .sort();
+check('only the calculated fields remain readonly', lockedIds.join(','), 'debitOrderAmount,expenseTotal');
+console.log(domFail === 0 ? 'Editable-field check OK' : 'Editable-field FAILURES: ' + domFail);
+
+// ── Static server smoke test ───────────────────────────────────────────────
 const mime = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.json': 'application/manifest+json', '.png': 'image/png', '.webmanifest': 'application/manifest+json' };
 const server = http.createServer((req, res) => {
   let p = req.url.split('?')[0];
@@ -45,5 +92,5 @@ server.listen(0, async () => {
   }
   server.close();
   console.log(bad === 0 ? 'HTTP smoke test OK (' + urls.length + ' URLs all 200)' : 'HTTP smoke test FAILURES: ' + bad);
-  process.exit(bad ? 1 : 0);
+  process.exit((bad || domFail) ? 1 : 0);
 });

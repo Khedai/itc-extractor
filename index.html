@@ -72,30 +72,38 @@
         </label>
         <button type="button" class="btn" id="btnExtract">Extract ITC Report</button>
       </div>
-      <div id="itcStatus" class="itc-status">Select the client's Datanamix ITC PDF and enter the password.</div>
+      <div id="itcStatus" class="itc-status">Select the client's Datanamix ITC PDF and enter the password &mdash; or just type the form in by hand if you have no report to extract.</div>
     </div>
 
     <!-- ITC report details — on-screen only, never in the emailed PDF -->
     <div class="itc-review" id="itcReview">
       <div class="section-title">ITC Report Details</div>
       <div class="itc-review-grid">
-        <label>Report Reference<input id="itcReportRefView" readonly></label>
-        <label>Search Date<input id="itcSearchDateView" readonly></label>
-        <label>Second Name<input id="itcSecondNameView" readonly></label>
-        <label>Maiden Name<input id="itcMaidenView" readonly></label>
-        <label>Title<input id="itcTitleView" readonly></label>
-        <label>Gender<input id="itcGenderView" readonly></label>
-        <label>Birth Date<input id="itcBirthView" readonly></label>
-        <label>Home Telephone<input id="itcHomeView" readonly></label>
-        <label>Work Telephone<input id="itcWorkView" readonly></label>
-        <label>Postal Address<input id="itcPostalView" readonly></label>
-        <label>Consumer Score<input id="itcScoreView" readonly></label>
-        <label>Risk Category<input id="itcRiskView" readonly></label>
-        <label>Debt Review Status<input id="itcDebtReviewView" readonly></label>
-        <label>Total Monthly Instalments<input id="itcTotalInstView" readonly></label>
-        <label>Total Outstanding Debt<input id="itcTotalDebtView" readonly></label>
-        <label>Total Arrears<input id="itcTotalArrearsView" readonly></label>
+        <label>Report Reference<input id="itcReportRefView"></label>
+        <label>Search Date<input id="itcSearchDateView"></label>
+        <label>Second Name<input id="itcSecondNameView"></label>
+        <label>Maiden Name<input id="itcMaidenView"></label>
+        <label>Title<input id="itcTitleView"></label>
+        <label>Gender<input id="itcGenderView"></label>
+        <label>Birth Date<input id="itcBirthView"></label>
+        <label>Home Telephone<input id="itcHomeView"></label>
+        <label>Work Telephone<input id="itcWorkView"></label>
+        <label>Postal Address<input id="itcPostalView"></label>
+        <label>Consumer Score<input id="itcScoreView"></label>
+        <label>Risk Category<input id="itcRiskView"></label>
+        <label>Debt Review Status<input id="itcDebtReviewView"></label>
+        <label>Total Monthly Instalments<input id="itcTotalInstView"></label>
+        <label>Total Outstanding Debt<input id="itcTotalDebtView"></label>
+        <label>Total Arrears<input id="itcTotalArrearsView"></label>
       </div>
+      <!-- These boxes are typed in by hand when there is no report to extract, so
+           they are deliberately left editable: an extraction still overwrites them
+           (js/app.js fillForm), and being unnamed they never reach the draft, the
+           tracker or the emailed PDF. See tools/smoke_test.js, which fails if a box
+           here is ever locked again. -->
+      <div class="itc-hint">You can type in every box above by hand &mdash; useful when
+        you have no report to extract. These details stay on this screen only: they are
+        never printed and never included in the emailed PDF.</div>
     </div>
 
     <div class="section">
@@ -229,6 +237,25 @@
   <!-- PWA registration -->
   <script>
     if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol)) {
+      // A deploy replaces the worker while a page is open, and the page on screen was
+      // served by the previous one — the build that looked like it was missing a
+      // section. Reloading once when the new worker takes control shows the deploy
+      // instead of a cached copy of the old build. A first install has no controller,
+      // so the guard keeps it from reloading on that visit.
+      const hadController = !!navigator.serviceWorker.controller;
+      let reloaded = false;
+      navigator.serviceWorker.addEventListener('controllerchange', () => {
+        if (!hadController || reloaded) return;
+        reloaded = true;
+        // Never interrupt an application that is being sent (the overlay is up).
+        const overlay = document.getElementById('sendOverlay');
+        if (overlay && overlay.classList.contains('show')) return;
+        // The autosave is debounced, so hand the open draft over before reloading.
+        if (window.ITCApp && window.ITCApp.saveDraft) {
+          try { window.ITCApp.saveDraft(); } catch (e) {}
+        }
+        location.reload();
+      });
       window.addEventListener('load', () => {
         navigator.serviceWorker.register('sw.js').catch(() => {});
       });

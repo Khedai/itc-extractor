@@ -105,6 +105,10 @@ td input,td select{border:0;height:25px;padding:3px}
 .itc-review-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-top:6px}
 .itc-review-grid label{display:flex;flex-direction:column;gap:2px}
 .itc-review-grid label{font-weight:bold}
+/* The review grid is typeable now (no report to extract? fill it by hand), so the
+   boxes must not look greyed-out/disabled the way a readonly field does. */
+.itc-review-grid input{background:#fff}
+.itc-hint{margin-top:7px;font-size:12px;color:#44546b;font-style:italic}
 
 /* ── Result notifications ─────────────────────────────────────── */
 .result-panel{margin:8px 10px;border:1px solid #5b9b72;background:#edf8f0;padding:10px;display:none}

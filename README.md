@@ -45,7 +45,11 @@ Then open <http://localhost:8080>.
 
 1. **Extract** — click the panel's file picker, choose the Datanamix ITC PDF,
    enter the report's password if it's protected, and click
-   **Extract ITC Report**.
+   **Extract ITC Report**. **No report to hand?** Skip this step entirely:
+   every box on the form is typeable, including the *ITC Report Details* panel
+   (which an extraction would otherwise fill in). Those review boxes stay on
+   screen only — they are never printed and never sent in the emailed PDF — and
+   nothing in the app requires an extraction before you can submit.
 2. **Complete** — fill the manual fields (income, expenses, docs) and, if the
    client is signing remotely, send a signature request (see
    [Signature requests](#signature-requests-remote-signing)).
@@ -202,25 +206,54 @@ report or applicant data.
 
 ## Configure the email recipient
 
-Open `js/config.js` and set `recipientEmail`:
+The address the office receives applications at is set **on the backend**
+(`MAIL_TO` in `khusela-signature-backend`), which is the path that actually
+delivers. `js/config.js` still carries `recipientEmail` for the FormSubmit
+fallback:
 
 ```js
 window.ITC_CONFIG = {
-  recipientEmail: 'khuselamanagement@gmail.com',  // <-- your address here
+  recipientEmail: 'khuselamanagement@gmail.com',  // <-- the fallback's address
   subject: 'Khusela Credit Application - ITC report',
   fileNamePrefix: 'Khusela-Credit-Application',
-  signatureApiBase: '',  // optional remote signing — see "Signature requests"
+  signatureApiBase: '',  // the backend; it also carries the email — see below
 };
 ```
 
-Email is sent through **FormSubmit.co** — a free, no-backend service that works
-from any static host. The filled form is attached to the email as a **PDF**
-(field `attachment`, up to FormSubmit's 10 MB limit; the app auto-compresses
-the PDF and re-sends if it ever gets too large).
+Email travels by one of **two paths**, and the message on screen always says which
+one carried the application.
 
-### The PDF is posted as a real form — never switch this to fetch()
+1. **The Khusela backend** — `POST <signatureApiBase>/api/email`, the same Render
+   service the Signature section uses. It mails the PDF from the office's own
+   mailbox and answers with a real HTTP status, which is what lets
+   **Submit & Email** report the truth. The recipient is the backend's own
+   `MAIL_TO` setting and nothing in the request can name one. Used whenever
+   `signatureApiBase` is set.
+2. **FormSubmit.co** — the original no-backend service, kept as the **fallback**
+   for the states the backend cannot cover: no `signatureApiBase` configured, the
+   backend answering **503 `email_not_configured`** (its mailbox has not been set
+   up yet), or the backend not answering at all (the free instance sleeps after
+   ~15 minutes idle). A message from this path says it was used and that delivery
+   cannot be confirmed.
 
-`js/email.js` submits the hidden form that lives in `index.html` (`#emailForm` →
+**Why the backend path exists:** on 2026-09-30 FormSubmit answered every
+submission with **HTTP 500** — its own documentation page did too. The app posts
+through a hidden cross-origin iframe and cannot read that answer, so it reported
+success while no application arrived. Sending from the backend removed the third
+party and made the outcome visible. The backend side of this is documented in
+`khusela-signature-backend/README.md` (set `MAIL_TO`, `SMTP_USER` and an SMTP
+**app password** there; until then the route answers 503 and the app falls back).
+
+The filled form is attached to the email as a **PDF** (field `attachment`). The
+limit is **20 MB** through the backend (`MAX_EMAIL_MB` there) and **10 MB** through
+the FormSubmit fallback; the app auto-compresses the PDF once and refuses to post
+anything larger, naming the limit that applies.
+
+### The FormSubmit fallback posts a real form — never switch this to fetch()
+
+That applies to path 2 only (the backend path is a plain `fetch()` with `FormData`,
+because it is a JSON-answering API). `js/email.js` submits the hidden form that
+lives in `index.html` (`#emailForm` →
 `#emailFrame`, `enctype="multipart/form-data"`, with a real file input named
 `attachment`), so the browser performs a **genuine form POST**. FormSubmit keeps
 uploaded files **only** for a real form post: a `fetch()`/XHR submission is
@@ -228,7 +261,7 @@ treated as AJAX — the notification email still arrives, **but the PDF is
 silently dropped** (and its docs advertise no file support on `/ajax/` at all).
 This trap was fallen into twice in this project's history, so the transport is
 deliberately a plain form. Consequence: FormSubmit's reply renders inside the
-hidden frame and cannot be read, so the success message is plain rather than
+hidden frame and cannot be read, so a message from that path is plain rather than
 reporting the form's activation state.
 
 ### First send = activation (why you may only see a "form submission" notification)
@@ -290,7 +323,11 @@ git push origin main
   *Install app*.
 - **iOS / Safari:** Share → *Add to Home Screen*.
 
-The service worker caches everything for offline use after the first visit.
+The service worker caches everything for offline use after the first visit. The
+document itself, the manifest and `js/config.js` are fetched **network-first**, so a
+deploy is visible on the next visit instead of hiding behind the copy cached on that
+device; when a new worker takes control while a page is open, the page reloads once
+(the open draft is saved first) so the new build is what you are looking at.
 
 ## Project layout
 
@@ -310,7 +347,7 @@ khusela-itc-pwa/
 ├── vendor/             # pdf.js, html2canvas, jsPDF (offline)
 ├── icons/              # PWA icons (regenerate: powershell tools/make_icons.ps1)
 ├── manifest.webmanifest
-├── sw.js               # offline cache
+├── sw.js               # offline cache; the page itself is network-first
 └── tools/              # Node regression tests
 ```
 
@@ -333,6 +370,43 @@ own plain-Node test:
 ```bash
 node tools/test_tracker_node.js
 ```
+
+The email routing has its own plain-Node test. It loads `js/email.js` into a stub
+browser scope, so it can say exactly which request goes out and what is in it, and
+whether the hidden FormSubmit form was used at all:
+
+```bash
+node tools/test_email_node.js
+```
+
+> This is the test that would have caught the September 2026 outage, in which
+> FormSubmit answered every submission with a 500 and the app still reported
+> success. It fails if a refusal from the mail service (502, 429, 401/403) is ever
+> answered as a success again, if a 503 / unreachable service stops falling back,
+> if the recipient is ever taken from the request instead of the service's own
+> setting, or if the PDF stops travelling in the `attachment` field.
+
+The service worker's caching strategy has a plain-Node test too — it drives
+`sw.js` in a stub scope, so a page that a deploy should have replaced cannot go
+back to being served from the cache:
+
+```bash
+node tools/test_sw_node.js
+```
+
+The smoke test checks that every asset `index.html` references exists, that the
+HTML itself is sane (ids used by the tests, no accidentally locked field), and
+that serving the folder over HTTP answers 200 for the entry points:
+
+```bash
+node tools/smoke_test.js
+```
+
+> It fails if any box in the *ITC Report Details* panel becomes `readonly` again
+> — those boxes are typed in by hand when there is no report to extract — and if
+> any of the applicant fields a signing link is built from (`name`, `surname`,
+> `id`, `cell`, `whatsapp`, `email`) is ever locked. Only the two calculated
+> totals (`debitOrderAmount`, `expenseTotal`) may stay readonly.
 
 ## Security notes
 

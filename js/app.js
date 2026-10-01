@@ -183,6 +183,11 @@
     draftTimer = setTimeout(saveDraft, 400);
   }
 
+  // Exposed for the PWA update path in index.html: when a new deploy takes control
+  // the page reloads, and a reload must not cost the last few keystrokes — the
+  // autosave above is debounced, so this is what puts the open draft in storage first.
+  window.ITCApp = { saveDraft };
+
   function restoreDraft() {
     let data = null;
     try { data = JSON.parse(localStorage.getItem(DRAFT_KEY)); } catch (e) { data = null; }
@@ -300,8 +305,12 @@
     return prefix + '-' + new Date().toISOString().split('T')[0] + '.pdf';
   }
 
-  // FormSubmit's hard attachment limit is 10 MB (see js/email.js).
+  // The ceiling the email actually has: js/email.js reports 20 MB when the app
+  // sends through the Khusela backend (js/config.js signatureApiBase) and the
+  // 10 MB FormSubmit always insisted on when it does not. Keeping the number and
+  // the wording in one place is why the export exists at all.
   const MAX_ATTACH_BYTES = (window.ITCEmail && window.ITCEmail.MAX_ATTACHMENT_BYTES) || 10 * 1024 * 1024;
+  const MAX_ATTACH_MB = (window.ITCEmail && window.ITCEmail.MAX_ATTACHMENT_MB) || 10;
 
   async function generatePdf(opts) {
     return await window.ITCPdf.generate($('formPage'), opts);
@@ -328,7 +337,7 @@
         blob = await generatePdf({ scale: 1.4, quality: 0.65 });
         if (blob.size > MAX_ATTACH_BYTES) {
           hideSending();
-          showResult(false, 'The PDF is ' + (blob.size / 1048576).toFixed(1) + ' MB — over the email service\'s 10 MB limit. Nothing was sent; your draft is still saved in this browser.');
+          showResult(false, 'The PDF is ' + (blob.size / 1048576).toFixed(1) + ' MB — over the email service\'s ' + MAX_ATTACH_MB + ' MB limit. Nothing was sent; your draft is still saved in this browser.');
           return;
         }
       }

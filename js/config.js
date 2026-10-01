@@ -12,6 +12,12 @@ window.ITC_CONFIG = {
   // address (https://itc-extractor.vercel.app) is already in the backend's
   // ALLOWED_ORIGINS, so the requests below are accepted from here.
   //
+  // js/email.js uses this same base: "Submit & Email" sends the finished PDF to
+  // <signatureApiBase>/api/email, which mails it from the office's own mailbox
+  // and answers with a real status. It falls back to the FormSubmit path when
+  // that service says it has no mailbox configured (503) or does not answer at
+  // all (the sleep below), and the message on screen then says so.
+  //
   // The free Render instance sleeps after ~15 minutes idle and takes up to a
   // minute to wake; js/signature.js wakes it with a repeated /health read
   // before the first write, then sends that write exactly once.
