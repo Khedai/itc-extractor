@@ -347,7 +347,22 @@
       startSendTips();
       const res = await window.ITCEmail.send(blob, filename, CONFIG);
       hideSending();
-      showResult(res.ok, res.msg);
+      // The application that has just gone is finished, and the signature captured
+      // for it belongs to it alone. Leaving it in the box is what let it follow the
+      // consultant into the next client's application: load another Datanamix report
+      // (or type the next applicant in by hand) and the previous applicant's
+      // signature was still in the box — and so was inside the next applicant's PDF.
+      // Only a send that actually happened forgets it, and only once it has happened:
+      // a failure leaves the box untouched, because the retry still needs it. The
+      // draft is deliberately NOT cleared — a failed or repeated send starts from the
+      // same form.
+      const forgotten = (res.ok && window.ITCSignature && window.ITCSignature.clear)
+        ? (window.ITCSignature.clear() || 0)
+        : 0;
+      showResult(res.ok, res.msg + (forgotten
+        ? ' The signature box' + (forgotten === 1 ? ' has' : 'es have') +
+          ' been cleared for the next application.'
+        : ''));
     } catch (e) {
       hideSending();
       showResult(false, 'Failed to generate the PDF: ' + (e && e.message ? e.message : e));

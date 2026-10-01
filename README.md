@@ -172,7 +172,10 @@ Notes:
   this device and must never be shared with the client.
 - Pending requests are remembered in this browser alongside the draft, so a
   signature that arrives after you close the page is picked up next time.
-  **New Application** clears them.
+  **New Application** clears them, and so does a **successful Submit & Email** —
+  the application has gone, so its signature must not turn up in the next
+  applicant's box. A send that fails leaves everything where it is, because the
+  retry still needs that signature.
 - The buttons and the status lines are **never** in the PDF or the printed form —
   only the captured signature is.
 - The link is **not sent automatically**. It is copied so the consultant can

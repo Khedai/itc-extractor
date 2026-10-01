@@ -54,6 +54,11 @@
   let state = {};
   let pollTimer = null;
   const busy = {};
+  // Bumped by clear(). A request that comes back after the application it was made
+  // for has been sent (or cleared) must not write itself into the fresh form: the
+  // free instance can be asleep, so an invitation can still be in flight more than a
+  // minute later, when the consultant has long since pressed Submit & Email.
+  let generation = 0;
 
   // ── Local persistence ────────────────────────────────────────────────────
   function load() {
@@ -220,6 +225,8 @@
     }
 
     const btn = $('sigSend' + n);
+    const gen = generation;
+    let stale = false;
     busy[n] = true;
     btn.disabled = true;
     note(n, 'Creating the secure signing link…');
@@ -232,6 +239,11 @@
         // The first click after a quiet spell may have to wake a sleeping instance.
         note(n, 'Waking the signing service — this can take up to a minute…');
       });
+
+      // The application this link was asked for can be sent (or cleared) while the
+      // request is in flight — see `generation`. Recording it afterwards would hand
+      // the previous applicant's link, and later their signature, to the next one.
+      if (gen !== generation) { stale = true; return; }
 
       state[n] = {
         invitationId: d.invitationId,
@@ -261,6 +273,10 @@
       busy[n] = false;
       btn.disabled = false;
       render(n);
+      // render() has its say first, so this reads as the reason the box is empty.
+      if (stale) {
+        note(n, 'The application was sent before this link was created — send a new link for the next applicant.', 'err');
+      }
     }
   }
 
@@ -297,7 +313,13 @@
       if (!res.ok) return;
       // A data URL keeps the image inside the render, so the PDF never depends
       // on a cross-origin request being allowed at print time.
-      img.src = await blobToDataUrl(await res.blob());
+      const dataUrl = await blobToDataUrl(await res.blob());
+      // The box may no longer belong to this request: the application was cleared
+      // (sent, or New Application) or a new link was created for the same slot while
+      // the image was downloading. Painting here would put a forgotten signature back
+      // into the box, and from there into the next applicant's PDF.
+      if (state[n] !== s) return;
+      img.src = dataUrl;
       render(n);
     } catch (e) { /* the box simply stays empty; the status still reports "Signed" */ }
   }
@@ -328,8 +350,13 @@
     await Promise.all(SLOTS.map((slot) => (state[slot.n] ? refresh(slot.n, true) : null)));
   }
 
-  // "New Application" — forget every pending request held on this device.
+  // "New Application" — and, from js/app.js, a send that
+  // actually happened — forgets every request held on this device: nothing captured
+  // for a finished application may reappear in the next applicant's boxes. Returns
+  // how many were forgotten, so a caller can say so instead of the box going quiet.
   function clear() {
+    const forgotten = Object.keys(state).length;
+    generation++;
     state = {};
     SLOTS.forEach((slot) => { delete busy[slot.n]; });
     try { localStorage.removeItem(STORE_KEY); } catch (e) {}
@@ -338,6 +365,7 @@
       if (img) { img.removeAttribute('src'); img.hidden = true; }
     });
     renderAll();
+    return forgotten;
   }
 
   function init() {
