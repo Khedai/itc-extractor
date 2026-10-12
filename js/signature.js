@@ -3,8 +3,10 @@
 // purpose.
 //
 // The consultant presses "Send Signing Link": the app asks the Khusela
-// signature backend for a secure one-time link, copies it, and the consultant
-// sends it to the applicant however they prefer (WhatsApp, SMS, e-mail). The
+// signature backend for a secure one-time link, copies it, and opens WhatsApp
+// to the number already on the form (typed in or filled by the ITC extractor)
+// with the link pre-typed — one click, then Send in WhatsApp. "Copy Link" stays
+// as the fallback for a different number (or SMS/e-mail). The
 // client opens it on their own device, signs, and the backend stores the
 // signature. This module then finds the captured signature and shows it inside
 // the applicant's box, so it is included in the PDF and the e-mail that follows.
@@ -151,19 +153,57 @@
   }
 
   // The applicant details already on the form are what the signing page shows
-  // the client, so the consultant never types them twice.
-  function clientDetails() {
-    const get = (id) => {
-      const el = $(id);
-      return el ? String(el.value || '').trim() : '';
-    };
+  // the client, so the consultant never types them twice. Slot 2 reads the
+  // spouse fields (name-only inputs, so by name) and falls back to the main
+  // applicant where a spouse value is empty.
+  function fieldVal(idOrName) {
+    const byId = $(idOrName);
+    if (byId && typeof byId.value === 'string' && byId.value.trim()) {
+      return byId.value.trim();
+    }
+    try {
+      const byName = document.querySelector('[name="' + idOrName + '"]');
+      if (byName && typeof byName.value === 'string') return String(byName.value).trim();
+    } catch (e) { /* stub DOM in tests — fall through to empty */ }
+    return byId ? String(byId.value || '').trim() : '';
+  }
+
+  // wa.me needs digits only, international format without "+". South African
+  // mobiles arrive as 082… (extractor + hand-typed), +2782… or 2782… — all become
+  // 2782…. Anything else keeps its digits (00 prefix and "+" stripped) so
+  // non-SA numbers still work; returns '' when there is nothing sendable.
+  function normalizeZaPhone(raw) {
+    let s = String(raw || '').trim();
+    if (!s) return '';
+    s = s.replace(/^(00|\+)/, '');
+    s = s.replace(/\D/g, '');
+    if (!s) return '';
+    if (/^0\d{9}$/.test(s)) return '27' + s.slice(1);
+    return (s.length >= 10 && s.length <= 15) ? s : '';
+  }
+
+  // The number "Send Signing Link" targets: slot 1 is the applicant's own
+  // Cell/Whatsapp (extractor fills Cell), slot 2 is the spouse's.
+  function slotPhone(n) {
+    if (n === 2) return fieldVal('spouse_cell') || fieldVal('spouse_whatsapp');
+    return fieldVal('cell') || fieldVal('whatsapp');
+  }
+
+  function whatsappUrl(phoneDigits, text) {
+    return 'https://wa.me/' + phoneDigits + '?text=' + encodeURIComponent(text);
+  }
+
+  function clientDetails(n) {
+    const val = (idOrName) => fieldVal(idOrName);
+    const spouseName = [val('spouse_name'), val('spouse_surname')].filter(Boolean).join(' ');
+    const mainName = [val('name'), val('surname')].filter(Boolean).join(' ');
     return {
-      clientName: [get('name'), get('surname')].filter(Boolean).join(' '),
-      idNumber: get('id'),
-      phone: get('cell') || get('whatsapp'),
-      email: get('email'),
-      address: get('address'),
-      applicationRef: get('fAppRef'),
+      clientName: (n === 2 && spouseName) ? spouseName : mainName,
+      idNumber: (n === 2 && val('spouse_id')) ? val('spouse_id') : val('id'),
+      phone: slotPhone(n),
+      email: (n === 2 && val('spouse_email')) ? val('spouse_email') : val('email'),
+      address: val('address'),
+      applicationRef: val('fAppRef'),
     };
   }
 
@@ -218,7 +258,7 @@
       return;
     }
 
-    const details = clientDetails();
+    const details = clientDetails(n);
     if (!details.clientName || !details.idNumber) {
       note(n, 'Enter the applicant Name, Surname and ID on the form first.', 'err');
       return;
@@ -264,9 +304,30 @@
         await navigator.clipboard.writeText(d.signingLink);
         copied = true;
       } catch (e) { copied = false; }
-      note(n, copied
-        ? 'Link created and copied — send it to ' + slot.label + '.'
-        : 'Link created — use Copy Link to send it to ' + slot.label + '.', 'ok');
+
+      // One click to the number on the form: open WhatsApp with the link
+      // pre-typed. Copy Link stays for a different number (or SMS/e-mail).
+      // window.open after an await can be blocked as a popup — then the note
+      // keeps the outcome and Copy Link still holds the link.
+      const digits = normalizeZaPhone(slotPhone(n));
+      if (digits) {
+        const msg = 'Hi ' + (details.clientName || slot.label) +
+          ', please sign here: ' + d.signingLink;
+        let opened = false;
+        try {
+          const w = window.open(whatsappUrl(digits, msg), '_blank');
+          if (w) { try { w.opener = null; } catch (e) {} opened = true; }
+        } catch (e) { opened = false; }
+        note(n, opened
+          ? 'Link created' + (copied ? ', copied, ' : ' ') + 'and WhatsApp opened — press Send there.' +
+            ' Wrong number? Edit the form and resend, or use Copy Link.'
+          : 'Link created' + (copied ? ' and copied' : '') +
+            ' — popups are blocked, use Copy Link or open WhatsApp to ' + digits + ' manually.', 'ok');
+      } else {
+        note(n, copied
+          ? 'Link created and copied — no valid number on the form, so send it to ' + slot.label + ' manually.'
+          : 'Link created — enter the number on the form and resend, or use Copy Link to send it to ' + slot.label + '.', 'ok');
+      }
     } catch (e) {
       note(n, (e && e.message) || 'Could not create the signing link.', 'err');
     } finally {
@@ -396,7 +457,7 @@
     }, POLL_MS);
   }
 
-  window.ITCSignature = { init, clear, refreshAll, enabled };
+  window.ITCSignature = { init, clear, refreshAll, enabled, _normalizeZaPhone: normalizeZaPhone, _whatsappUrl: whatsappUrl };
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
   else init();
