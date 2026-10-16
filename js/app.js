@@ -262,6 +262,9 @@
 
     if (!$('fDate').value) $('fDate').value = new Date().toISOString().split('T')[0];
     calc();
+    // The Client Digital Signing panels take their number and email from the form,
+    // so an extracted report arrives with them already filled in.
+    if (window.ITCSignature && window.ITCSignature.prefill) window.ITCSignature.prefill();
     saveDraft(); // programmatic fill — persist it now
   }
 
@@ -438,6 +441,9 @@
 
     calc();
     if (restoreDraft()) {
+      // The draft carries the applicant's cell and email, so the signing panels
+      // are filled from it rather than left empty for a reloaded page.
+      if (window.ITCSignature && window.ITCSignature.prefill) window.ITCSignature.prefill();
       setStatus('ok', 'Restored your autosaved draft (kept only on this device). Review it, then press <b>Submit &amp; Email</b>.');
     }
   });

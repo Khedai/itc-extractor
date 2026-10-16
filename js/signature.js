@@ -2,11 +2,13 @@
 // Applicant boxes and their labels) is unchanged; this module gives each box a
 // purpose.
 //
-// The consultant presses "Send Signing Link": the app asks the Khusela
-// signature backend for a secure one-time link, copies it, and opens WhatsApp
-// to the number already on the form (typed in or filled by the ITC extractor)
-// with the link pre-typed — one click, then Send in WhatsApp. "Copy Link" stays
-// as the fallback for a different number (or SMS/e-mail). The
+// The consultant works in the **Client Digital Signing** panel below the form,
+// one per applicant: press "Generate Signing Link" and the app asks the Khusela
+// signature backend for a secure one-time link, shows it and copies it. Then
+// "Send via WhatsApp" opens WhatsApp to the number in that panel with the link
+// pre-typed, "Send via Email" has the backend mail it to the client's address,
+// and "Copy Link" is there for delivering it some other way (a different number,
+// SMS) or when the browser blocks the pop-up. The
 // client opens it on their own device, signs, and the backend stores the
 // signature. This module then finds the captured signature and shows it inside
 // the applicant's box, so it is included in the PDF and the e-mail that follows.
@@ -47,6 +49,20 @@
     { n: 1, label: 'Applicant 1' },
     { n: 2, label: 'Applicant 2' },
   ];
+
+  // Everything one panel is made of. The panel sits outside #formPage, so none of
+  // it is ever in the PDF or the printed application, and none of it is part of
+  // the autosaved draft — it is all rebuilt from the form on load.
+  const ui = (n) => ({
+    panel: $('signingPanel' + n),
+    phone: $('sigPhone' + n),
+    mail: $('sigMail' + n),
+    link: $('sigLink' + n),
+    gen: $('genSig' + n),
+    copy: $('copySig' + n),
+    whatsapp: $('waSig' + n),
+    email: $('mailSig' + n),
+  });
 
   const cfg = () => window.ITC_CONFIG || {};
   const base = () => String(cfg().signatureApiBase || '').replace(/\/+$/, '');
@@ -168,83 +184,134 @@
     return byId ? String(byId.value || '').trim() : '';
   }
 
-  // wa.me needs digits only, international format without "+". South African
-  // mobiles arrive as 082… (extractor + hand-typed), +2782… or 2782… — all become
-  // 2782…. Anything else keeps its digits (00 prefix and "+" stripped) so
-  // non-SA numbers still work; returns '' when there is nothing sendable.
-  function normalizeZaPhone(raw) {
-    let s = String(raw || '').trim();
-    if (!s) return '';
-    s = s.replace(/^(00|\+)/, '');
-    s = s.replace(/\D/g, '');
-    if (!s) return '';
-    if (/^0\d{9}$/.test(s)) return '27' + s.slice(1);
-    return (s.length >= 10 && s.length <= 15) ? s : '';
+// wa.me needs digits only, international format without "+". South African
+// mobiles arrive as 082… (extractor + hand-typed), +2782… or 2782… — all become
+// 2782…. Anything else keeps its digits (00 prefix and "+" stripped) so
+// non-SA numbers still work; returns '' when there is nothing sendable.
+function normalizeZaPhone(raw) {
+  let s = String(raw || '').trim();
+  if (!s) return '';
+  s = s.replace(/^(00|\+)/, '');
+  s = s.replace(/\D/g, '');
+  if (!s) return '';
+  if (/^0\d{9}$/.test(s)) return '27' + s.slice(1);
+  return (s.length >= 10 && s.length <= 15) ? s : '';
+}
+
+const EMAIL_RE = /^[^\s@,;<>]+@[^\s@,;<>]+\.[^\s@,;<>]+$/;
+
+function whatsappUrl(phoneDigits, text) {
+  return 'https://wa.me/' + phoneDigits + '?text=' + encodeURIComponent(text);
+}
+
+// What is on the FORM, which is what the ITC extractor fills: slot 1 is the
+// applicant's own Cell/Whatsapp, slot 2 the spouse's.
+function formPhone(n) {
+  if (n === 2) return fieldVal('spouse_cell') || fieldVal('spouse_whatsapp');
+  return fieldVal('cell') || fieldVal('whatsapp');
+}
+
+function formEmail(n) {
+  if (n === 2) return fieldVal('spouse_email');
+  return fieldVal('email');
+}
+
+// What the panel will actually use: whatever the consultant typed in the panel,
+// and otherwise the form's value (which prefill() copies in). A panel that is
+// filled in by hand must win, because correcting a mistyped number there is the
+// whole reason those boxes are editable.
+function panelValue(box, fromForm) {
+  const typed = box ? String(box.value || '').trim() : '';
+  return typed || fromForm;
+}
+
+function clientDetails(n) {
+  const val = (idOrName) => fieldVal(idOrName);
+  const box = ui(n);
+  const spouseName = [val('spouse_name'), val('spouse_surname')].filter(Boolean).join(' ');
+  const mainName = [val('name'), val('surname')].filter(Boolean).join(' ');
+  return {
+    clientName: (n === 2 && spouseName) ? spouseName : mainName,
+    idNumber: (n === 2 && val('spouse_id')) ? val('spouse_id') : val('id'),
+    phone: panelValue(box.phone, formPhone(n)),
+    email: panelValue(box.mail, formEmail(n)),
+    address: val('address'),
+    applicationRef: val('fAppRef'),
+  };
+}
+
+// Copy the form's numbers into empty panel boxes — after an ITC extraction, and
+// again whenever the app restores a draft. Only ever into an EMPTY box: a number
+// the consultant corrected or typed for this applicant must survive the next
+// extraction and the next reload.
+function prefill(n) {
+  const box = ui(n);
+  if (!box.phone || !box.mail) return;
+  if (!String(box.phone.value || '').trim()) box.phone.value = formPhone(n);
+  if (!String(box.mail.value || '').trim()) box.mail.value = formEmail(n);
+}
+
+function prefillAll() {
+  SLOTS.forEach((slot) => prefill(slot.n));
+}
+
+// ── Rendering ───────────────────────────────────────────────────────────
+function setLink(n, link) {
+  const box = ui(n).link;
+  if (box) box.value = link || '';
+}
+
+// keepNote: the action that triggered this render has already written its own
+// message ("Link created and copied…", "the link could not be emailed…") and that
+// is the more useful line. Without this the status line below would overwrite it
+// the instant it was written — which is exactly what happened before: generate()
+// said what it had done and then immediately replaced that with "Waiting for the
+// signature…", so the confirmation was never seen.
+function render(n, keepNote) {
+  const box = ui(n);
+  const img = $('sigimg' + n);
+  const sigbox = $('sigbox' + n);
+  if (!box.panel || !box.gen || !box.copy || !box.whatsapp || !box.email) return;
+
+  const s = state[n] || null;
+
+  // Not configured: no signing requests can be made, so the panel has nothing to
+  // offer and the form looks exactly like the original design.
+  if (!enabled()) {
+    box.panel.hidden = true;
+    if (img) { img.removeAttribute('src'); img.hidden = true; }
+    if (sigbox) sigbox.classList.remove('signed');
+    note(n, '');
+    return;
   }
 
-  // The number "Send Signing Link" targets: slot 1 is the applicant's own
-  // Cell/Whatsapp (extractor fills Cell), slot 2 is the spouse's.
-  function slotPhone(n) {
-    if (n === 2) return fieldVal('spouse_cell') || fieldVal('spouse_whatsapp');
-    return fieldVal('cell') || fieldVal('whatsapp');
+  box.panel.hidden = false;
+  const has = !!(s && s.signingLink);
+  // Copy / WhatsApp / Email act on a link that exists; without one they are
+  // hidden rather than left to fail when pressed.
+  box.copy.hidden = !has;
+  box.whatsapp.hidden = !has;
+  box.email.hidden = !has;
+  setLink(n, has ? s.signingLink : '');
+
+  const shown = !!(img && img.getAttribute('src'));
+  if (img) img.hidden = !shown;
+  if (sigbox) sigbox.classList.toggle('signed', shown);
+
+  [box.gen, box.copy, box.whatsapp, box.email].forEach((b) => { b.disabled = !!busy[n]; });
+  if (keepNote) return;
+  if (busy[n]) return;
+  if (!s) { note(n, 'No signing link generated yet.'); return; }
+
+  if (s.status === 'signed') {
+    note(n, 'Signed' + (s.signedAt ? ' ' + new Date(s.signedAt).toLocaleString() : '') + '.', 'ok');
+  } else if (s.status === 'expired') {
+    note(n, 'This link expired before it was signed — generate a new one.', 'err');
+  } else {
+    note(n, 'Waiting for the signature… link expires ' +
+      (s.expiresAt ? new Date(s.expiresAt).toLocaleDateString() : 'soon') + '.');
   }
-
-  function whatsappUrl(phoneDigits, text) {
-    return 'https://wa.me/' + phoneDigits + '?text=' + encodeURIComponent(text);
-  }
-
-  function clientDetails(n) {
-    const val = (idOrName) => fieldVal(idOrName);
-    const spouseName = [val('spouse_name'), val('spouse_surname')].filter(Boolean).join(' ');
-    const mainName = [val('name'), val('surname')].filter(Boolean).join(' ');
-    return {
-      clientName: (n === 2 && spouseName) ? spouseName : mainName,
-      idNumber: (n === 2 && val('spouse_id')) ? val('spouse_id') : val('id'),
-      phone: slotPhone(n),
-      email: (n === 2 && val('spouse_email')) ? val('spouse_email') : val('email'),
-      address: val('address'),
-      applicationRef: val('fAppRef'),
-    };
-  }
-
-  // ── Rendering ───────────────────────────────────────────────────────────
-  function render(n) {
-    const sendBtn = $('sigSend' + n);
-    const copyBtn = $('sigCopy' + n);
-    const img = $('sigimg' + n);
-    const box = $('sigbox' + n);
-    if (!sendBtn || !copyBtn) return;
-
-    // Not configured: leave the section exactly as the original design.
-    if (!enabled()) {
-      sendBtn.hidden = true;
-      copyBtn.hidden = true;
-      if (img) { img.removeAttribute('src'); img.hidden = true; }
-      if (box) box.classList.remove('signed');
-      note(n, '');
-      return;
-    }
-
-    sendBtn.hidden = false;
-    const s = state[n] || null;
-    copyBtn.hidden = !(s && s.signingLink);
-
-    const shown = !!(img && img.getAttribute('src'));
-    if (img) img.hidden = !shown;
-    if (box) box.classList.toggle('signed', shown);
-
-    if (busy[n]) return;
-    if (!s) { note(n, 'No signing link sent yet.'); return; }
-
-    if (s.status === 'signed') {
-      note(n, 'Signed' + (s.signedAt ? ' ' + new Date(s.signedAt).toLocaleString() : '') + '.', 'ok');
-    } else if (s.status === 'expired') {
-      note(n, 'This link expired before it was signed — send a new one.', 'err');
-    } else {
-      note(n, 'Waiting for the signature… link expires ' +
-        (s.expiresAt ? new Date(s.expiresAt).toLocaleDateString() : 'soon') + '.');
-    }
-  }
+}
 
   function renderAll() {
     SLOTS.forEach((slot) => render(slot.n));
@@ -253,22 +320,34 @@
   // ── Actions ─────────────────────────────────────────────────────────────
   async function generate(n) {
     const slot = SLOTS.find((s) => s.n === n);
+    const box = ui(n);
     if (!enabled()) {
       note(n, 'Set signatureApiBase in js/config.js to send signing links.', 'err');
       return;
     }
 
+    // Read what the panel holds NOW, not at the end: an invite stores the
+    // address the link was created for, and the backend mails the link to that
+    // stored address. An address corrected after generating would then be a
+    // different one from the one the client already has — so a changed number
+    // means a new link, which is what the note below says.
     const details = clientDetails(n);
     if (!details.clientName || !details.idNumber) {
       note(n, 'Enter the applicant Name, Surname and ID on the form first.', 'err');
       return;
     }
+    if (!EMAIL_RE.test(details.email)) {
+      note(n, 'Enter the client\'s email address in this panel — it is where the link is sent from "Send via Email".', 'err');
+      if (box.mail) box.mail.focus();
+      return;
+    }
 
-    const btn = $('sigSend' + n);
+    const btn = box.gen;
     const gen = generation;
     let stale = false;
     busy[n] = true;
     btn.disabled = true;
+    render(n);
     note(n, 'Creating the secure signing link…');
     try {
       const d = await api('/api/invite', {
@@ -305,38 +384,17 @@
         copied = true;
       } catch (e) { copied = false; }
 
-      // One click to the number on the form: open WhatsApp with the link
-      // pre-typed. Copy Link stays for a different number (or SMS/e-mail).
-      // window.open after an await can be blocked as a popup — then the note
-      // keeps the outcome and Copy Link still holds the link.
-      const digits = normalizeZaPhone(slotPhone(n));
-      if (digits) {
-        const msg = 'Hi ' + (details.clientName || slot.label) +
-          ', please sign here: ' + d.signingLink;
-        let opened = false;
-        try {
-          const w = window.open(whatsappUrl(digits, msg), '_blank');
-          if (w) { try { w.opener = null; } catch (e) {} opened = true; }
-        } catch (e) { opened = false; }
-        note(n, opened
-          ? 'Link created' + (copied ? ', copied, ' : ' ') + 'and WhatsApp opened — press Send there.' +
-            ' Wrong number? Edit the form and resend, or use Copy Link.'
-          : 'Link created' + (copied ? ' and copied' : '') +
-            ' — popups are blocked, use Copy Link or open WhatsApp to ' + digits + ' manually.', 'ok');
-      } else {
-        note(n, copied
-          ? 'Link created and copied — no valid number on the form, so send it to ' + slot.label + ' manually.'
-          : 'Link created — enter the number on the form and resend, or use Copy Link to send it to ' + slot.label + '.', 'ok');
-      }
+      note(n, 'Link created' + (copied ? ' and copied' : '') + ' — send it to ' +
+        slot.label + ' with WhatsApp or email.', 'ok');
     } catch (e) {
       note(n, (e && e.message) || 'Could not create the signing link.', 'err');
     } finally {
       busy[n] = false;
-      btn.disabled = false;
-      render(n);
+      // keepNote: what was just said is the answer to what the consultant did.
+      render(n, true);
       // render() has its say first, so this reads as the reason the box is empty.
       if (stale) {
-        note(n, 'The application was sent before this link was created — send a new link for the next applicant.', 'err');
+        note(n, 'The application was sent before this link was created — generate a new link for the next applicant.', 'err');
       }
     }
   }
@@ -344,13 +402,93 @@
   async function copyLink(n) {
     const s = state[n];
     if (!s || !s.signingLink) return;
+    setLink(n, s.signingLink);
     try {
       await navigator.clipboard.writeText(s.signingLink);
       note(n, 'Signing link copied.', 'ok');
     } catch (e) {
-      // Clipboard blocked (older browser, or the page is not on https) — show the
-      // link so it can still be copied by hand.
-      note(n, s.signingLink);
+      // Clipboard blocked (older browser, or the page is not on https) — the link
+      // is in the box above it, ready to be copied by hand.
+      note(n, 'The link is in the box above — copy it from there.', 'err');
+    }
+  }
+
+  // Send via WhatsApp: one click opens WhatsApp with the link already typed, and
+  // the consultant presses Send there. Nothing leaves this device by itself —
+  // the client still has to be sent the message deliberately.
+  function sendWhatsApp(n) {
+    const s = state[n];
+    const box = ui(n);
+    if (!s || !s.signingLink) {
+      note(n, 'Generate a signing link first.', 'err');
+      return;
+    }
+    const digits = normalizeZaPhone(clientDetails(n).phone);
+    if (!digits) {
+      note(n, 'Enter the client\'s cell or WhatsApp number in this panel first.', 'err');
+      if (box.phone) box.phone.focus();
+      return;
+    }
+    const who = clientDetails(n).clientName;
+    const msg = 'Hi ' + (who || 'there') + ', please sign here: ' + s.signingLink;
+    // A popup opened after an await can be blocked; the link is still in the box,
+    // so that case is a message and not a failure.
+    let opened = false;
+    try {
+      const w = window.open(whatsappUrl(digits, msg), '_blank');
+      if (w) { try { w.opener = null; } catch (e) {} opened = true; }
+    } catch (e) { opened = false; }
+    note(n, opened
+      ? 'WhatsApp opened with the link — press Send there.'
+      : 'The browser blocked the WhatsApp window. Copy Link still works, or open wa.me/' + digits + ' yourself.', opened ? 'ok' : 'err');
+  }
+
+  // Send via Email: the backend mails the link to the address already held on
+  // this signing request, so the consultant never has to paste it anywhere.
+  async function sendEmail(n) {
+    const s = state[n];
+    const box = ui(n);
+    if (!s || !s.signingLink) {
+      note(n, 'Generate a signing link first.', 'err');
+      return;
+    }
+    if (!s.manageToken) {
+      note(n, 'This signing request cannot be emailed — generate a new link.', 'err');
+      return;
+    }
+    const addr = clientDetails(n).email;
+    if (!EMAIL_RE.test(addr)) {
+      note(n, 'Enter the client\'s email address in this panel first.', 'err');
+      if (box.mail) box.mail.focus();
+      return;
+    }
+    const btn = box.email;
+    busy[n] = true;
+    btn.disabled = true;
+    note(n, 'Emailing the signing link…');
+    try {
+      const d = await api('/api/notify/email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ manageToken: s.manageToken, signingLink: s.signingLink }),
+      });
+      // accepted:false means the mail server took the message and then dropped
+      // it, which is not a delivery and must not read as one.
+      note(n, d && d.accepted === false
+        ? 'The mail server did not accept the message for ' + addr + ' — use Copy Link.'
+        : 'Signing link emailed to ' + addr + '.', d && d.accepted === false ? 'err' : 'ok');
+    } catch (e) {
+      // The one failure with a known cause: the service has no mailbox set up, so
+      // it never tried. Its own code would reach the consultant as the bare word
+      // "email_not_configured", so it is turned back into a sentence — and into
+      // the advice that still works.
+      const raw = (e && e.message) || '';
+      note(n, /email_not_configured/.test(raw)
+        ? 'This signing service has no mailbox set up, so nothing was emailed — use Copy Link.'
+        : (raw || 'The signing link could not be emailed — use Copy Link.'), 'err');
+    } finally {
+      busy[n] = false;
+      render(n, true);
     }
   }
 
@@ -424,6 +562,14 @@
     SLOTS.forEach((slot) => {
       const img = $('sigimg' + slot.n);
       if (img) { img.removeAttribute('src'); img.hidden = true; }
+      // The panel belongs to the application being cleared too: a link left in
+      // its box is a link the next applicant could send, and the number in it is
+      // this applicant's. Both are wiped, and prefill() puts the new applicant's
+      // back in.
+      const box = ui(slot.n);
+      if (box.link) box.link.value = '';
+      if (box.phone) box.phone.value = '';
+      if (box.mail) box.mail.value = '';
     });
     renderAll();
     return forgotten;
@@ -435,11 +581,13 @@
     load();
 
     SLOTS.forEach((slot) => {
-      const send = $('sigSend' + slot.n);
-      const copy = $('sigCopy' + slot.n);
-      if (send) send.addEventListener('click', () => generate(slot.n));
-      if (copy) copy.addEventListener('click', () => copyLink(slot.n));
+      const box = ui(slot.n);
+      if (box.gen) box.gen.addEventListener('click', () => generate(slot.n));
+      if (box.copy) box.copy.addEventListener('click', () => copyLink(slot.n));
+      if (box.whatsapp) box.whatsapp.addEventListener('click', () => sendWhatsApp(slot.n));
+      if (box.email) box.email.addEventListener('click', () => sendEmail(slot.n));
     });
+    prefillAll();
     renderAll();
 
     if (!enabled()) return;
@@ -457,7 +605,10 @@
     }, POLL_MS);
   }
 
-  window.ITCSignature = { init, clear, refreshAll, enabled, _normalizeZaPhone: normalizeZaPhone, _whatsappUrl: whatsappUrl };
+  // prefill is exported because js/app.js is what knows when the form has just
+  // been filled — by an ITC extraction or by a restored draft — and a panel that
+  // is empty should not sit there waiting to be typed into.
+  window.ITCSignature = { init, clear, refreshAll, enabled, prefill: prefillAll };
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
   else init();

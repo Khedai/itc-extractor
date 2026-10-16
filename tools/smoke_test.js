@@ -37,6 +37,12 @@ function tagFor(id) {
   return (html.match(new RegExp('<input\\b[^>]*\\bid="' + id + '"[^>]*>')) || [''])[0];
 }
 
+// Any element carrying the id — the panels hold buttons and a status line, not
+// just inputs, and tagFor() above deliberately only looks at inputs.
+function anyTagFor(id) {
+  return (html.match(new RegExp('<[a-z]+\\b[^>]*\\bid="' + id + '"[^>]*>')) || [''])[0];
+}
+
 const REVIEW_IDS = [
   'itcReportRefView', 'itcSearchDateView', 'itcSecondNameView', 'itcMaidenView',
   'itcTitleView', 'itcGenderView', 'itcBirthView', 'itcHomeView', 'itcWorkView',
@@ -56,15 +62,48 @@ check('the on-screen-only hint is shown to the user', /class="itc-hint"/.test(ht
   check('"' + id + '" is editable', /readonly|disabled/.test(tag), false);
 });
 
-// Only the two genuinely derived totals may stay locked out of every input on
-// the page (the loans "reduced instalment" column is derived too, but it is
-// built in js/app.js, not here).
+// Only the genuinely derived totals and the two generated-link boxes may stay
+// locked out of every input on the page (the loans "reduced instalment" column is
+// derived too, but it is built in js/app.js, not here). The signing panels'
+// number and email are deliberately NOT readonly: they are editable so a number
+// can be corrected without touching the form.
 const lockedIds = [...html.matchAll(/<input\b[^>]*>/g)]
   .filter((m) => /\sreadonly(?=[\s>])/.test(m[0]))
   .map((m) => (m[0].match(/\bid="([^"]+)"/) || [null, '(no id)'])[1])
   .sort();
-check('only the calculated fields remain readonly', lockedIds.join(','), 'debitOrderAmount,expenseTotal');
+check('only the calculated fields and the generated-link boxes remain readonly',
+  lockedIds.join(','), 'debitOrderAmount,expenseTotal,sigLink1,sigLink2');
 console.log(domFail === 0 ? 'Editable-field check OK' : 'Editable-field FAILURES: ' + domFail);
+
+// ── Client Digital Signing panels ────────────────────────────────────────────
+// One panel per applicant, below the form so it can never reach the PDF or the
+// printout, with the two delivery choices the section is for: WhatsApp and
+// e-mail. A "Send Via" dropdown is not wanted; and the buttons that used to sit
+// under each signature box must be gone from the form itself.
+const panels = [...html.matchAll(/<section class="signing-panel" id="signingPanel(\d)">/g)].map((m) => m[1]);
+check('there is a Client Digital Signing panel per applicant', panels.join(','), '1,2');
+[1, 2].forEach((n) => {
+  ['genSig', 'copySig', 'waSig', 'mailSig', 'sigPhone', 'sigMail', 'sigLink', 'sigNote']
+    .forEach((base) => {
+      check('panel ' + n + ' has #' + base + n, anyTagFor(base + n).length > 0, true);
+    });
+  check('panel ' + n + '\'s number and email stay editable',
+    /readonly|disabled/.test(tagFor('sigPhone' + n) + tagFor('sigMail' + n)), false);
+});
+// The two ways of sending it are two buttons. A channel dropdown is not wanted,
+// and "SMS" is the giveaway: it is the option such a dropdown offered.
+check('both delivery choices are buttons, not a dropdown',
+  ['Send via WhatsApp', 'Send via Email'].filter((t) => html.includes(t)).join(','),
+  'Send via WhatsApp,Send via Email');
+check('and there is no channel dropdown offering SMS',
+  /<option[^>]*>\s*SMS\s*</i.test(html), false);
+check('the old buttons are gone from the signature boxes',
+  ['sigSend1', 'sigSend2', 'sigCopy1', 'sigCopy2'].filter((id) => tagFor(id)).join(','), '');
+// Outside #formPage is what keeps them out of the PDF, so that is checked rather
+// than assumed: the whole block has to sit after the form's closing tag.
+const pageEnd = html.indexOf('<!-- Client Digital Signing');
+check('the panels sit outside #formPage, so they cannot reach the PDF',
+  pageEnd > html.lastIndexOf('id="formPage"') && pageEnd > 0, true);
 
 // ── Static server smoke test ───────────────────────────────────────────────
 const mime = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.json': 'application/manifest+json', '.png': 'image/png', '.webmanifest': 'application/manifest+json' };

@@ -185,20 +185,10 @@
             <div class="sig-cell">
               <div class="sigbox" id="sigbox1"><img id="sigimg1" alt="Signature of Applicant 1" hidden></div>
               <center>Applicant 1</center>
-              <div class="sig-chrome">
-                <button type="button" class="btn sig-btn" id="sigSend1">Send Signing Link</button>
-                <button type="button" class="btn secondary sig-btn" id="sigCopy1" hidden>Copy Link</button>
-                <div class="sig-note" id="sigNote1"></div>
-              </div>
             </div>
             <div class="sig-cell">
               <div class="sigbox" id="sigbox2"><img id="sigimg2" alt="Signature of Applicant 2" hidden></div>
               <center>Applicant 2</center>
-              <div class="sig-chrome">
-                <button type="button" class="btn sig-btn" id="sigSend2">Send Signing Link</button>
-                <button type="button" class="btn secondary sig-btn" id="sigCopy2" hidden>Copy Link</button>
-                <div class="sig-note" id="sigNote2"></div>
-              </div>
             </div>
           </div>
         </div>
@@ -228,6 +218,50 @@
       <span>EXT number: <input type="text" name="ext_number"></span>
       <span class="checkline"><label>CPI <input type="checkbox" name="cpi"></label><label>CELL PHONE <input type="checkbox" name="cell_phone"></label><label>OTHER <input type="checkbox" name="other"></label></span>
     </div>
+  </div>
+
+  <!-- Client Digital Signing ─────────────────────────────────────────────────
+       One panel per applicant, holding every control for that applicant's
+       signing link: generate it, then send it by WhatsApp or e-mail, or copy it
+       to deliver it some other way.
+
+       Deliberately OUTSIDE #formPage: the panels are app chrome, so they can
+       never end up inside the PDF or the printed application. Only the captured
+       signature — an <img> inside the .sigbox above — belongs to the form. -->
+  <div class="signing-panels" id="signingPanels">
+    <section class="signing-panel" id="signingPanel1">
+      <h2 class="signing-title">Client Digital Signing &mdash; Applicant 1</h2>
+      <p class="signing-hint">Generate a secure one-time signing link. The client only needs to sign once.</p>
+      <div class="signing-grid">
+        <label>Client Cell / WhatsApp<input id="sigPhone1" type="tel" placeholder="0821234567" autocomplete="off"></label>
+        <label>Client Email<input id="sigMail1" type="email" placeholder="client@email.com" autocomplete="off"></label>
+      </div>
+      <div class="signing-actions">
+        <button type="button" class="btn green" id="genSig1">Generate Signing Link</button>
+        <button type="button" class="btn secondary" id="copySig1" hidden>Copy Link</button>
+        <button type="button" class="btn green" id="waSig1">Send via WhatsApp</button>
+        <button type="button" class="btn" id="mailSig1">Send via Email</button>
+      </div>
+      <input id="sigLink1" class="signing-link" readonly placeholder="Generated secure link will appear here" aria-label="Generated secure signing link for Applicant 1">
+      <div class="sig-note" id="sigNote1"></div>
+    </section>
+
+    <section class="signing-panel" id="signingPanel2">
+      <h2 class="signing-title">Client Digital Signing &mdash; Applicant 2</h2>
+      <p class="signing-hint">For a second signer. Leave it alone when only one person signs.</p>
+      <div class="signing-grid">
+        <label>Client Cell / WhatsApp<input id="sigPhone2" type="tel" placeholder="0821234567" autocomplete="off"></label>
+        <label>Client Email<input id="sigMail2" type="email" placeholder="client@email.com" autocomplete="off"></label>
+      </div>
+      <div class="signing-actions">
+        <button type="button" class="btn green" id="genSig2">Generate Signing Link</button>
+        <button type="button" class="btn secondary" id="copySig2" hidden>Copy Link</button>
+        <button type="button" class="btn green" id="waSig2">Send via WhatsApp</button>
+        <button type="button" class="btn" id="mailSig2">Send via Email</button>
+      </div>
+      <input id="sigLink2" class="signing-link" readonly placeholder="Generated secure link will appear here" aria-label="Generated secure signing link for Applicant 2">
+      <div class="sig-note" id="sigNote2"></div>
+    </section>
   </div>
 
   <!-- Hidden email transport -->

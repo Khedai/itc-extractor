@@ -14,9 +14,10 @@ A standalone, installable web app that:
    (browser `localStorage`) with the full 35-column tracker layout, and the
    updated tracker downloads as `Khusela_Sales_Tracker.csv`. **Export
    Tracker** re-downloads that CSV without adding a row (see below).
-5. **Collects a signature remotely** (optional) — **Send Signing Link** under
-   Applicant 1 or 2 creates a secure one-time link, the client signs on their own
-   device, and the captured signature appears in that box and in the PDF (see
+5. **Collects a signature remotely** (optional) — a **Client Digital Signing**
+   panel per applicant creates a secure one-time link and sends it by WhatsApp or
+   e-mail in one press; the client signs on their own device and the captured
+   signature appears in that box and in the PDF (see
    [Signature requests](#signature-requests-remote-signing)).
 
 All libraries are vendored locally (`vendor/`) so the app works fully offline.
@@ -139,9 +140,11 @@ filled straight from the matching form field.
 ## Signature requests (remote signing)
 
 The **Signature** section (Applicant 1 / Applicant 2) keeps the original Khusela
-layout. Two small buttons appear under each box **only when a signature service
-has been configured** — with `signatureApiBase` left empty the section behaves
-exactly as it always has and nothing is ever sent.
+layout — two boxes that fill with the client's signature. Every control for
+getting that signature asked for lives in a **Client Digital Signing** panel
+below the form, one per applicant. Both panels appear **only when a signature
+service has been configured** — with `signatureApiBase` left empty they are hidden
+and the app behaves exactly as it always has.
 
 1. Point the app at the backend in `js/config.js` (see
    [Configure the email recipient](#configure-the-email-recipient)):
@@ -153,34 +156,53 @@ exactly as it always has and nothing is ever sent.
    The backend is the `khusela-backend` project. Add this site's exact address to
    its `ALLOWED_ORIGINS`, otherwise the browser blocks the requests.
 
-2. With the applicant's **Name, Surname and ID Number** filled in, press **Send
-   Signing Link** under the matching box. A secure, one-time, expiring link is
-   created and copied to the clipboard.
-3. Send that link to the applicant — WhatsApp, SMS or e-mail. They open it on
-   their own phone, draw their signature with a finger and submit it.
-4. This app polls for the result every 20 seconds. As soon as the signature
-   arrives it is drawn inside that applicant's box (green border), and it is
-   included in the PDF the next time you press **Submit & Email**.
+2. Enter the applicant's **Name, Surname and ID Number** on the form. The panels
+   fill themselves from the form — including after an ITC extraction, which is
+   where the cell number comes from — and stay editable, so a corrected or
+   different number needs no trip back to the form.
+
+3. Press **Generate Signing Link** in that applicant's panel. A secure, one-time,
+   expiring link is created, shown in the box under the buttons and copied to the
+   clipboard.
+
+4. Send it, whichever way suits the client:
+
+   | Button | What happens |
+   | --- | --- |
+   | **Send via WhatsApp** | WhatsApp opens on the number in that panel with `Hi <name>, please sign here: <link>` already typed — press Send there. Nothing is sent without that press. |
+   | **Send via Email** | The backend mails the link to the email address in that panel, from the office mailbox. |
+   | **Copy Link** | Copies it again, for any other route (SMS, a second number) or when the browser blocks the WhatsApp pop-up. |
+
+   The e-mail goes to the address held on **that signing request**, which is the
+   one the link was generated with — so an address corrected afterwards applies to
+   the next link, not to this one.
+
+5. They open the link on their own phone, draw their signature with a finger and
+   submit it. This app polls for the result every 20 seconds; as soon as the
+   signature arrives it is drawn inside that applicant's box (green border), and
+   it is included in the PDF the next time you press **Submit & Email**.
 
 Notes:
 
-- **Applicant 1 and Applicant 2 are independent** — each box owns its own link
-  and its own status line ("Waiting for the signature…", "Signed …", or "That
-  link expired before it was signed").
+- **Applicant 1 and Applicant 2 are independent** — each panel owns its own link,
+  its own contact details and its own status line ("Waiting for the signature…",
+  "Signed …", or "That link expired before it was signed").
 - **Two separate secrets** are involved. The link you send is one-time and
   expiring; the token that lets *this* device read the signature back stays on
   this device and must never be shared with the client.
+- The panels sit **outside** the form, so they are never in the PDF or the
+  printed application — only the captured signature is. They are not part of the
+  autosaved draft either; they are rebuilt from the form on load.
 - Pending requests are remembered in this browser alongside the draft, so a
   signature that arrives after you close the page is picked up next time.
   **New Application** clears them, and so does a **successful Submit & Email** —
   the application has gone, so its signature must not turn up in the next
   applicant's box. A send that fails leaves everything where it is, because the
   retry still needs that signature.
-- The buttons and the status lines are **never** in the PDF or the printed form —
-  only the captured signature is.
-- The link is **not sent automatically**. It is copied so the consultant can
-  deliver it however suits that client.
-- If the request fails (backend down, address wrong) the box shows a short error
+- **"Send via Email" needs the backend to have a mailbox configured.** Without one
+  it answers `503 email_not_configured`, the panel says so in a sentence and
+  points at **Copy Link** — it never reports a message that did not go out.
+- If a request fails (backend down, address wrong) the panel shows a short error
   and nothing else about the application is affected.
 
 ## Where are drafts saved?
@@ -189,8 +211,8 @@ Drafts are **autosaved to the browser's `localStorage` on the device you're
 using** — they never leave that device:
 
 - **Not uploaded** — no network request ever carries the form data, except the
-  PDF itself when you press **Submit & Email** and the applicant's name/ID when
-  you press **Send Signing Link** (see
+  PDF itself when you press **Submit & Email** and the applicant's name/ID/contact
+  details when you press **Generate Signing Link** (see
   [Signature requests](#signature-requests-remote-signing)).
 - **Not stored on any server** — the form itself has no backend and no database.
   The only server ever involved is the optional signature service, and it
@@ -406,17 +428,40 @@ node tools/smoke_test.js
 ```
 
 > It fails if any box in the *ITC Report Details* panel becomes `readonly` again
-> — those boxes are typed in by hand when there is no report to extract — and if
+> — those boxes are typed in by hand when there is no report to extract — if
 > any of the applicant fields a signing link is built from (`name`, `surname`,
-> `id`, `cell`, `whatsapp`, `email`) is ever locked. Only the two calculated
-> totals (`debitOrderAmount`, `expenseTotal`) may stay readonly.
+> `id`, `cell`, `whatsapp`, `email`) is ever locked, if a *Client Digital Signing*
+> panel loses one of its controls, if its number or email stops being editable, or
+> if the panels move inside the form (where a PDF render would pick them up). Only
+> the two calculated totals (`debitOrderAmount`, `expenseTotal`) and the two
+> generated-link boxes (`sigLink1`, `sigLink2`) may stay readonly.
+
+The signing panels have a plain-Node test of their own — `js/signature.js` in a
+stub page with a recording `window.open`, so the WhatsApp URL that *would* have
+been opened can be read, and a fetch that answers the signing service:
+
+```bash
+node tools/test_signing_link_node.js
+```
+
+> It fails if the link is no longer shown in the panel's own box, if the
+> confirmation a press produces is overwritten by the status line (which is what
+> happened before, so the message was never seen), if a number corrected in the
+> panel is ignored, if "Send via Email" names a recipient of its own instead of
+> letting the backend use the address on the request, if a 503 from a service with
+> no mailbox is ever reported as a send, if a corrected number is overwritten by a
+> later prefill, or if a panel's link and contact details survive **New
+> Application**.
 
 ## Security notes
 
 - The app runs entirely in the browser; extracted data never leaves the device
   except when you submit (PDF → email service), when you export the tracker CSV
-  (**Submit to Tracker** / **Export Tracker**), or when you send a signing
-  request (**Send Signing Link** → applicant name, ID and contact details only).
+  (**Submit to Tracker** / **Export Tracker**), or when you create a signing
+  request (**Generate Signing Link** → applicant name, ID and contact details only).
+  **Send via WhatsApp** opens WhatsApp on your own device — the message is only
+  sent when you press Send there; **Send via Email** hands the link to the signing
+  backend, which mails it to the address already held on that request.
 - Drafts are stored **only** in the browser's `localStorage` on the device that
   created them — never on a server, never in git.
 - Datanamix reports contain personal data — host this app somewhere you

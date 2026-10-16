@@ -251,7 +251,7 @@ function check(label, actual, expected) {
     ['tracker:clear', 'pdf:generate', 'email:send', 'sigimg1:src removed']);
   check('the box is empty now', page.held(), false);
   check('and the box says so, instead of just going quiet', page.note(1),
-    'No signing link sent yet.');
+    'No signing link generated yet.');
   check('the record is gone from this device, not merely hidden',
     page.store.has(STORE_KEY), false);
   check('the draft and the form were left alone — a resend starts from the same form',
