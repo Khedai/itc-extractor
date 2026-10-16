@@ -282,6 +282,21 @@
 
     try {
       const d = await window.ITCExtractor.extract(file, $('itcPassword').value);
+
+      // A different report is a different applicant, so everything held for the
+      // previous one goes before the new details are filled in: its signing
+      // links, the signature captured in its box, and its number and email in the
+      // signing panels. Left in place, the next applicant's form carries the last
+      // applicant's signature — into the PDF and the email — and a link that can
+      // still be sent to the wrong person.
+      //
+      // This is done AFTER a successful extraction, not when the file is chosen:
+      // a mistyped password fails the extraction, and wiping the applicant
+      // currently being worked on because of a typo would be the wrong way round.
+      const forgotten = (window.ITCSignature && window.ITCSignature.clear)
+        ? (window.ITCSignature.clear() || 0)
+        : 0;
+
       fillForm(d);
       const cur = (d.accounts || []).reduce((s, a) => s + (a.instalment || 0), 0);
       const red = (d.accounts || []).reduce((s, a) => s + (a.reduced || 0), 0);
@@ -290,9 +305,14 @@
         'ITC extracted — <b>' + d.pages + '</b> page(s) read, <b>' + (d.accounts || []).length +
         '</b> qualifying creditor account(s) imported. Current instalments R ' + za(cur) +
         '; Reduced instalments R ' + za(red) + '; Debit Order R ' + za(red) +
-        '. R0 and insurance accounts excluded. Review it, then press <b>Submit &amp; Email</b>.',
+        '. R0 and insurance accounts excluded. Review it, then press <b>Submit &amp; Email</b>.' +
+        (forgotten
+          ? ' The previous applicant\'s signing link' + (forgotten === 1 ? ' has' : 's have') +
+            ' been cleared.'
+          : ''),
       );
-      showResult(true, 'ITC report extracted — the application form has been filled.');
+      showResult(true, 'ITC report extracted — the application form has been filled.' +
+        (forgotten ? ' The previous signing link was cleared.' : ''));
     } catch (e) {
       setStatus('err', (e && e.message) ? e.message : 'The report could not be extracted.');
       if (e && e.code === 'PASSWORD_REQUIRED') $('itcPassword').focus();

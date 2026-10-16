@@ -210,6 +210,10 @@ Notes:
   the application has gone, so its signature must not turn up in the next
   applicant's box. A send that fails leaves everything where it is, because the
   retry still needs that signature.
+- **Extracting a different report clears them too**, before the new details go
+  in — a link that can still be sent, and a signature that would otherwise be
+  printed inside the next applicant's application. A *failed* extraction (a wrong
+  password) clears nothing: that is a typo, not a new client.
 - **"Send via Email" opens a webmail draft** — Gmail by default, Outlook or the
   OS mail app if `mailWebmail` says so — with the link written and the client
   addressed; it does not send anything by itself, and it does not need the

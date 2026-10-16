@@ -15,7 +15,7 @@
 // below moves with every change to any of them, or a deploy that reworks how an
 // application is emailed or signed would simply not reach the browsers that used
 // the old build.
-const CACHE = 'khusela-itc-v37';
+const CACHE = 'khusela-itc-v38';
 const ASSETS = [
   './',
   './index.html',

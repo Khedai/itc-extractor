@@ -318,6 +318,50 @@ function check(label, actual, expected) {
     ['tracker:clear', 'pdf:generate', 'email:send']);
   check('with the box left as empty as it was', fresh.held(), false);
 
+  // ── 5. A different report is a different applicant ────────────────────────
+  // The failure this locks down: a consultant loads the NEXT applicant's Datanamix
+  // report without finishing the last one, and the previous applicant's signing
+  // link — and the signature already captured in their box — are still there. The
+  // link can then be sent to the wrong person, and the signature travels into the
+  // next applicant's PDF.
+  const next = load({ state: SIGNED });
+  await next.settle();
+  check('the previous signature is on the form to begin with', next.held(), true);
+
+  // The report arrives and reads successfully.
+  next.window.ITCExtractor = {
+    extract: async () => ({
+      pages: 9, first: 'Nomsa', second: 'Dlamini', surname: 'Dlamini',
+      id: '8001015000088', cell: '0715551234', email: 'nomsa@example.com',
+      accounts: [{ sub: 'Standard Bank', acct: '1', balance: 5000, instalment: 500, category: 'Unsecured' }],
+    }),
+  };
+  next.elements.itcFile.files = [{ name: 'next-report.pdf' }];
+  await next.click('btnExtract');
+
+  check('the previous applicant\'s signing request is gone from the device',
+    next.store.has(STORE_KEY), false);
+  check('and their signature is out of the box', next.held(), false);
+  check('the box was emptied, not just hidden', next.log.includes('sigimg1:src removed'), true);
+  check('the status says so, instead of the consultant assuming it is theirs',
+    /previous applicant's signing link has been cleared/.test(next.elements.itcStatus.innerHTML), true);
+  check('and the new application is still extracted and filled',
+    /ITC extracted/.test(next.elements.itcStatus.innerHTML), true);
+
+  // A failed extraction must not wipe the applicant being worked on: a mistyped
+  // password is a typo, not a new client.
+  const stillOn = load({ state: SIGNED });
+  await stillOn.settle();
+  stillOn.window.ITCExtractor = {
+    extract: async () => { const e = new Error('The password you entered is incorrect.'); e.code = 'INCORRECT_PASSWORD'; throw e; },
+  };
+  stillOn.elements.itcFile.files = [{ name: 'report.pdf' }];
+  await stillOn.click('btnExtract');
+
+  check('a failed extraction leaves the current applicant\'s signature alone',
+    stillOn.held(), true);
+  check('and their signing request still on the device', stillOn.store.has(STORE_KEY), true);
+
   console.log(failed ? 'signature reset FAILURES: ' + failed : 'signature reset OK');
   process.exit(failed ? 1 : 0);
 })();
