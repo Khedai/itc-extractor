@@ -177,7 +177,7 @@
         try {
           if (frame.contentWindow.location.href === 'about:blank') return;
         } catch (e) { /* cross-origin — the answer page is here */ }
-        finish({ ok: true, msg: 'Submitted through the backup email service (FormSubmit), which cannot confirm delivery.' });
+        finish({ ok: true, msg: 'Submitted. Please check with the office that it arrived.' });
       }
 
       timer = setTimeout(() => finish({
@@ -192,6 +192,28 @@
   }
 
   // ── Transport 1: the Khusela backend ──────────────────────────────────────
+  // Turn whatever the mail service said into a sentence a consultant can act on.
+  // The raw text is kept for anyone reading the console, but it is not what the
+  // screen shows: SMTP codes, HTTP statuses and connection errors are for whoever
+  // fixes the service, and the consultant's next step is always the same — tell
+  // the office, and try again.
+  function plainReason(detail) {
+    const s = String(detail || '');
+    if (/timeout|timed out|did not respond|ETIMEDOUT|ENOTFOUND|ECONN/i.test(s)) {
+      return 'the mail service did not respond.';
+    }
+    if (/auth|535|password|credential|unauthor/i.test(s)) {
+      return 'the office\'s mail service would not accept its own sign-in details.';
+    }
+    if (/too large|attachment|413|exceed/i.test(s)) {
+      return 'the PDF is larger than the mail service allows.';
+    }
+    if (/not configured|no mailbox|mailbox/i.test(s)) {
+      return 'the office\'s mail service is not set up.';
+    }
+    return 'the mail service could not deliver it.';
+  }
+
   // A plain fetch() with FormData, the opposite of the FormSubmit rule above: this
   // is a JSON-answering API, so the status is the whole point. The PDF arrives as
   // the multipart field "attachment"; everything else is descriptive. `fallback`
@@ -218,10 +240,12 @@
       });
       // A refusal still carries a reason, and that reason is what the consultant
       // can act on — a wrong mailbox password and a rate limit read very
-      // differently to whoever has to fix it.
+      // differently to whoever has to fix it. What it must NOT be is raw: the
+      // consultant needs to know whether to wait, to tell the office, or to try
+      // again, and "Connection timeout" or "5355.7.8" tells them none of that.
       let data = null;
       try { data = await res.json(); } catch (e) { data = null; }
-      const detail = (data && (data.error || data.message)) || ('the mail service answered HTTP ' + res.status);
+      const detail = (data && (data.error || data.message)) || ('the mail service answered with an error');
 
       if (res.ok) {
         return {
@@ -239,14 +263,14 @@
         return {
           ok: false,
           reason: 'rate_limited',
-          msg: detail + ' Nothing was sent — your draft is still saved in this browser.',
+          msg: 'Too many applications have been emailed in a short time. Nothing was sent — wait a minute and press Submit & Email again. Your draft is still saved in this browser.',
         };
       }
       if (res.status === 401 || res.status === 403) {
         return {
           ok: false,
           reason: 'not_allowed',
-          msg: 'The office\'s mail service refused this app: ' + detail + ' Nothing was sent — tell the office, because this app is not on the list of sites that mail service accepts. Your draft is still saved in this browser.',
+          msg: 'The office\'s mail service would not accept this app. Nothing was sent — tell the office, because this app is not on their list of approved sites. Your draft is still saved in this browser.',
         };
       }
       // 400/413/500/502 and anything else: the service took the request and could
@@ -255,7 +279,8 @@
       return {
         ok: false,
         reason: 'refused',
-        msg: 'The application was NOT emailed: ' + detail + ' Nothing was sent — check with the office before sending again, and press Submit & Email to retry. Your draft is still saved in this browser.',
+        msg: 'The application was NOT submitted: ' + plainReason(detail) +
+          ' Nothing was sent — tell the office, and press Submit & Email to retry. Your draft is still saved in this browser.',
       };
     } catch (e) {
       // No status at all: the service is unreachable, still waking up, or its
@@ -298,14 +323,14 @@
         // ceiling, and app.js only re-rendered a smaller PDF against the limit
         // this file reported, which was the backend's.
         if (res2.reason === 'too_large') {
-          return fail('too_large', 'The office\'s own mail service ' + res.why + ', and the backup email service only accepts ' + (FORMSUBMIT_MAX_BYTES / 1048576) + ' MB — this PDF is larger. Nothing was sent; your draft is still saved in this browser.');
+          return fail('too_large', 'The PDF is ' + (blob.size / 1048576).toFixed(1) + ' MB — larger than this email system accepts, and the other route is not available at the moment. Nothing was sent; your draft is still saved in this browser.');
         }
         return res2;
       }
       return {
         ok: true,
         reason: 'sent_backup',
-        msg: 'The office\'s own mail service ' + res.why + ', so the application was handed to the backup email service (FormSubmit). That service cannot confirm delivery — please check with the office that it arrived. Your draft is still saved in this browser.',
+        msg: 'Application submitted. Please check with the office that it arrived. Your draft is still saved in this browser.',
       };
     }
 

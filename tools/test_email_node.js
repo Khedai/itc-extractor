@@ -244,11 +244,12 @@ const parts = (r) => (r.sent[0] ? [...r.sent[0].form.keys()] : []);
     field(post(noMailbox), 'Applicant'), 'Thandi Mokoena');
   check('so an application can still go out today', sentTo(noMailboxRes),
     { ok: true, reason: 'sent_backup' });
-  check('and the message says the office service was not set up',
-    /own mail service is not set up yet/.test(noMailboxRes.msg), true);
-  check('that the backup carried it', /backup email service \(FormSubmit\)/.test(noMailboxRes.msg), true);
-  check('and that delivery cannot be confirmed',
-    /cannot confirm delivery — please check with the office/.test(noMailboxRes.msg), true);
+  check('the message says only that it was submitted',
+    /^Application submitted\./.test(noMailboxRes.msg), true);
+  check('and asks the consultant to confirm it arrived, because nothing here can',
+    /check with the office that it arrived/.test(noMailboxRes.msg), true);
+  check('and names no email provider at all — a consultant has no use for one',
+    /FormSubmit|backup email service|own mail service/.test(noMailboxRes.msg), false);
 
   // A service that accepts the connection and then goes quiet (the free instance
   // sleeps) is the other state the old path exists for: it looks like a hang, and
@@ -260,8 +261,9 @@ const parts = (r) => (r.sent[0] ? [...r.sent[0].form.keys()] : []);
 
   check('a service that never answers falls back too', asleep.formPosts.length, 1);
   check('the send still succeeds', sentTo(asleepRes), { ok: true, reason: 'sent_backup' });
-  check('and names the reason it gave up on the office service',
-    /own mail service did not answer in time/.test(asleepRes.msg), true);
+  check('and does not tell the consultant about the plumbing behind it at all',
+    /own mail service|did not answer|could not be reached/.test(asleepRes.msg), false);
+  check('the submission still reads as submitted', /submitted/i.test(asleepRes.msg), true);
 
   // ── 3. A message the service tried and could not deliver is NOT hidden ─────
   // This is the September failure itself: a refusal that reached the consultant as
@@ -272,8 +274,14 @@ const parts = (r) => (r.sent[0] ? [...r.sent[0].form.keys()] : []);
   check('a refusal is a failure', sentTo(refusedRes), { ok: false, reason: 'refused' });
   check('and is not quietly retried through FormSubmit', refused.formPosts.length, 0);
   check('exactly one attempt was made', refused.sent.length, 1);
-  check('the consultant is told it was NOT emailed', /NOT emailed/.test(refusedRes.msg), true);
-  check('with the reason the mail server gave', /Invalid login: 535-5\.7\.8/.test(refusedRes.msg), true);
+  check('the consultant is told it was NOT submitted', /NOT submitted/.test(refusedRes.msg), true);
+  check('and told to tell the office, which is the only thing they can act on',
+    /tell the office/.test(refusedRes.msg), true);
+  // The raw SMTP code says "535-5.7.8" to whoever fixes the service and nothing
+  // at all to a consultant. What they need is that it is a sign-in problem.
+  check('the raw SMTP code is NOT put in front of them', /535/.test(refusedRes.msg), false);
+  check('but it is still recognisable as a sign-in problem',
+    /sign-in details/.test(refusedRes.msg), true);
 
   // A rate limit is a refusal too — retrying it through the other service is
   // exactly what the limit is there to stop.
@@ -281,8 +289,11 @@ const parts = (r) => (r.sent[0] ? [...r.sent[0].form.keys()] : []);
   const limitedRes = await limited.email.send(pdfBlob(2048), 'app.pdf', CFG);
 
   check('a rate limit is reported as one', sentTo(limitedRes), { ok: false, reason: 'rate_limited' });
-  check('the service\'s own explanation is shown',
-    /try again in a minute/.test(limitedRes.msg), true);
+  // The advice is kept — wait a moment and press the button again — and the
+  // service's own wording is not, because it is written for a developer.
+  check('it says to wait and try again',
+    /wait a minute and press Submit & Email again/.test(limitedRes.msg), true);
+  check('and does not quote the service verbatim', /Too many applications from this address/.test(limitedRes.msg), false);
   check('and the old path is not used to get around it', limited.formPosts.length, 0);
 
   // An app the service will not talk to is a setup mistake, and the message has to
@@ -294,9 +305,9 @@ const parts = (r) => (r.sent[0] ? [...r.sent[0].form.keys()] : []);
     { ok: false, reason: 'not_allowed' });
   check('and is not papered over by the old path either', refusedApp.formPosts.length, 0);
   check('the message says this site is not accepted',
-    /refused this app/.test(refusedAppRes.msg), true);
+    /would not accept this app/.test(refusedAppRes.msg), true);
   check('and points at the office, not the applicant',
-    /this app is not on the list of sites/.test(refusedAppRes.msg), true);
+    /not on their list of approved sites/.test(refusedAppRes.msg), true);
 
   // No status at all is the one failure that has to fall back: an unreachable
   // service is also what a blocked origin and a sleeping instance look like, and
@@ -306,7 +317,10 @@ const parts = (r) => (r.sent[0] ? [...r.sent[0].form.keys()] : []);
 
   check('an unreachable service falls back', unreachable.formPosts.length, 1);
   check('and the send still succeeds', sentTo(unreachableRes), { ok: true, reason: 'sent_backup' });
-  check('with the reason named', /own mail service could not be reached/.test(unreachableRes.msg), true);
+  check('with no mention of the plumbing behind it',
+    /own mail service|could not be reached/.test(unreachableRes.msg), false);
+  check('it still reads as submitted, with the advice to confirm it',
+    [/submitted/i.test(unreachableRes.msg), /check with the office/.test(unreachableRes.msg)], [true, true]);
 
   // ── 4. The size ceiling is the one that will actually apply ───────────────
   // js/app.js renders a smaller PDF against whatever this file reports, so a
@@ -332,10 +346,10 @@ const parts = (r) => (r.sent[0] ? [...r.sent[0].form.keys()] : []);
   check('a PDF the backup cannot take is a failure', sentTo(tooBigRes),
     { ok: false, reason: 'too_large' });
   check('the old path refused it rather than posting it', tooBigForBackup.formPosts.length, 0);
-  check('and the message explains the two different ceilings',
-    /only accepts 10 MB/.test(tooBigRes.msg), true);
-  check('blaming the office service\'s state, not the file',
-    /own mail service is not set up yet/.test(tooBigRes.msg), true);
+  check('and the message says plainly that the PDF is too large for the mail system',
+    /larger than this email system accepts/.test(tooBigRes.msg), true);
+  check('without blaming a service or naming a provider',
+    /own mail service|FormSubmit|backup/.test(tooBigRes.msg), false);
 
   // ── 5. With nothing configured, today's app behaves exactly as before ─────
   const noBackend = load({ recipientEmail: OFFICE }, () => {
@@ -349,9 +363,10 @@ const parts = (r) => (r.sent[0] ? [...r.sent[0].form.keys()] : []);
     FORMSUBMIT + encodeURIComponent(OFFICE));
   check('and the send is reported as handed over', sentTo(noBackendRes),
     { ok: true, reason: undefined });
-  check('the message names the service it cannot vouch for',
-    /Submitted through the backup email service \(FormSubmit\), which cannot confirm delivery\./
-      .test(noBackendRes.msg), true);
+  check('the message names no provider the app cannot vouch for',
+    /FormSubmit|backup email service/.test(noBackendRes.msg), false);
+  check('it says submitted and asks the consultant to confirm it arrived',
+    [/^Submitted/.test(noBackendRes.msg), /check with the office/.test(noBackendRes.msg)], [true, true]);
   check('such a deployment keeps the 10 MB limit it always had',
     noBackend.email.MAX_ATTACHMENT_BYTES, 10 * 1024 * 1024);
   check('which app.js quotes as 10', noBackend.email.MAX_ATTACHMENT_MB, 10);
