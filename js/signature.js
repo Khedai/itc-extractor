@@ -444,16 +444,35 @@ function render(n, keepNote) {
       : 'The browser blocked the WhatsApp window. Copy Link still works, or open wa.me/' + digits + ' yourself.', opened ? 'ok' : 'err');
   }
 
-  // Send via Email: opens the consultant's own mail app with the link already
+  // Where "Send via Email" opens the draft. See mailWebmail in js/config.js.
+//
+// A mailto: is the obvious answer and the one that fails most: it only works when
+// the machine has a program registered as its mail handler, and a Windows box
+// with none configured answers the click with silence — which is exactly what
+// "nothing happened" means to the consultant. The webmail composers take the
+// same parameters over https and open in any browser, with the client's address,
+// the subject and the whole message already filled in. Nothing is sent by any of
+// them until the consultant presses Send.
+function mailComposeUrl(addr, subject, body) {
+  const webmail = String((cfg().mailWebmail || 'gmail')).trim().toLowerCase();
+  const enc = encodeURIComponent;
+  if (webmail === 'outlook') {
+    return 'https://outlook.live.com/mail/0/deeplink/compose?to=' + enc(addr)
+      + '&subject=' + enc(subject) + '&body=' + enc(body);
+  }
+  if (webmail === 'gmail') {
+    return 'https://mail.google.com/mail/?view=cm&to=' + enc(addr)
+      + '&su=' + enc(subject) + '&body=' + enc(body);
+  }
+  // 'mailto' — and anything unrecognised falls back to it rather than opening
+  // nothing at all.
+  return 'mailto:' + enc(addr) + '?subject=' + enc(subject) + '&body=' + enc(body);
+}
+
+const mailtoHandler = (url) => /^mailto:/i.test(url);
+
+// Send via Email: opens the consultant's mail window with the link already
   // written, addressed to the client, and they press Send there.
-  //
-  // This is a redirect rather than a call to the signing service, and that is a
-  // decision with a reason behind it: mailing it from a server needs that server
-  // to have a working mailbox, and the only host this app talks to is on a free
-  // Render instance, which blocks outbound SMTP and has no mailbox configured. A
-  // mailto: needs neither — and it keeps the message in the consultant's own
-  // sent folder, which is where a client's "I never got it" question can be
-  // answered. Nothing is sent without the Send press.
   function sendEmail(n) {
     const s = state[n];
     const box = ui(n);
@@ -473,27 +492,29 @@ function render(n, keepNote) {
       + s.signingLink + '\n\n'
       + 'Open that link on your own device, draw your signature with your finger and press submit. '
       + 'You only sign once.\n\nThank you.';
-    // cc/bcc stay empty: only the client is on this. A mail app that cannot open
-    // a mailto: says so itself, and the link is still in the box above.
-    const url = 'mailto:' + encodeURIComponent(addr)
-      + '?subject=' + encodeURIComponent('Khusela: your signing link')
-      + '&body=' + encodeURIComponent(body);
-    // This one navigates the CURRENT tab rather than opening a new one, and that
-    // is not a style choice: Chrome refuses to navigate a new tab to a mailto:
-    // and leaves it sitting blank on about:blank, so window.open('mailto:…')
-    // silently does nothing. Assigning location.href is the way the mail handler
-    // is actually invoked. WhatsApp above keeps _blank, because that URL is
-    // ordinary https and the consultant wants to come straight back to the form.
-    let handed = false;
+    const url = mailComposeUrl(addr, 'Khusela: your signing link', body);
+
+    // Two different ways of handing it over, for two different reasons. A
+    // webmail composer is an ordinary https page, so it opens in a new tab like
+    // WhatsApp does. A mailto: cannot: Chrome refuses to navigate a new tab to
+    // one and leaves it sitting blank on about:blank, so it goes through this
+    // tab's location instead — which is what actually invokes the mail handler.
+    let opened = false;
     try {
-      window.location.href = url;
-      handed = true;
-    } catch (e) { handed = false; }
-    note(n, handed
-      ? 'Your email app should be opening with the link ready for ' + addr + ' — press Send there. '
-        + 'Nothing appears? Use Copy Link and write to ' + addr + ' yourself.'
-      : 'This browser would not open a mail app for a mailto: link. Use Copy Link, or write to ' + addr + ' yourself.',
-      handed ? 'ok' : 'err');
+      if (mailtoHandler(url)) {
+        window.location.href = url;
+        opened = true;
+      } else {
+        const w = window.open(url, '_blank');
+        if (w) { try { w.opener = null; } catch (e) {} opened = true; }
+      }
+    } catch (e) { opened = false; }
+
+    note(n, opened
+      ? 'Your email window should now be open with the link ready for ' + addr
+        + ' — press Send there. Nothing appears? Use Copy Link and write to ' + addr + ' yourself.'
+      : 'This browser would not open a mail window for that link. Use Copy Link, or write to '
+        + addr + ' yourself.', opened ? 'ok' : 'err');
   }
 
   // Download the captured signature once, then show it inside the applicant's box.

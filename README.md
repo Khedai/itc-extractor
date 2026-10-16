@@ -170,14 +170,19 @@ and the app behaves exactly as it always has.
    | Button | What happens |
    | --- | --- |
    | **Send via WhatsApp** | WhatsApp opens on the number in that panel with `Hi <name>, please sign here: <link>` already typed — press Send there. Nothing is sent without that press. |
-   | **Send via Email** | Your own email app opens, addressed to the client in that panel, with the link and the instructions already written — press Send there. |
+   | **Send via Email** | Your mail window opens — Gmail by default — addressed to the client in that panel, with the link and the instructions already written. Press Send there. |
    | **Copy Link** | Copies it again, for any other route (SMS, a second number) or when the browser blocks the pop-up. |
 
    Both sends are a redirect you finish with one press, so nothing goes out
-   without you sending it, and the message stays in your own **Sent** folder —
-   which is where you look when a client says they never got it. Neither depends
-   on the signing service being able to send mail, which it cannot: it runs on a
-   free Render instance, where outbound SMTP is blocked.
+   without you sending it. Neither depends on the signing service being able to
+   send mail, which it cannot: it runs on a free Render instance, where outbound
+   SMTP is blocked.
+
+   **Which mail window opens** is `mailWebmail` in `js/config.js`:
+   `'gmail'` (default) or `'outlook'` open that provider's web composer over
+   https, which works in any browser; `'mailto'` uses the operating system's own
+   mail app instead, and only works on a machine that has one registered — which
+   is why it is not the default.
 
    The address a link goes to is the one in the panel **at the moment the link
    was generated** — so an address corrected afterwards applies to the next link,
@@ -205,8 +210,9 @@ Notes:
   the application has gone, so its signature must not turn up in the next
   applicant's box. A send that fails leaves everything where it is, because the
   retry still needs that signature.
-- **"Send via Email" opens your own mail app** with the link written and the
-  client addressed; it does not send anything by itself, and it does not need the
+- **"Send via Email" opens a webmail draft** — Gmail by default, Outlook or the
+  OS mail app if `mailWebmail` says so — with the link written and the client
+  addressed; it does not send anything by itself, and it does not need the
   signing service to have a mailbox (it has none, and cannot have one on a free
   Render instance, where outbound SMTP is blocked).
 - If a request fails (backend down, address wrong) the panel shows a short error

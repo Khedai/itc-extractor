@@ -55,6 +55,7 @@ function element(id) {
 // opts.panel  — what the panel boxes already hold, i.e. a consultant's edits
 // opts.notify — what POST /api/notify/email answers; 'throw' is a failed send
 // opts.clipboard — 'deny' makes the clipboard refuse, as a non-https page does
+// opts.webmail — mailWebmail in js/config.js: which composer "Send via Email" opens
 // opts.open   — what window.open answers (null = popup blocked)
 // opts.base   — signatureApiBase; empty leaves the whole feature inert
 function load(opts) {
@@ -154,7 +155,7 @@ function load(opts) {
       get href() { return this._href; },
       set href(v) { navigated.push(String(v)); this._href = String(v); },
     },
-    ITC_CONFIG: { signatureApiBase: o.base === undefined ? BACKEND : o.base },
+    ITC_CONFIG: { signatureApiBase: o.base === undefined ? BACKEND : o.base, mailWebmail: o.webmail || 'gmail' },
   };
   sandbox.window = sandbox;
   // window.open has to be the sandbox's own, since the module calls window.open.
@@ -276,30 +277,50 @@ function check(label, actual, expected) {
 
   // ── 3. Send via Email: the backend mails it, nothing is pasted ─────────────
   // ── 3. Send via Email: a redirect, not a server-side send ───────────────────
+// The default is the Gmail composer, because a mailto: only works where the
+// machine has a mail handler registered and a Windows box with none answers the
+// click with silence. It is an ordinary https page, so it opens in a new tab.
 await page.press('mailSig1');
-const mailto = page.navigated[0] || '';
-check('it hands a mailto: to the mail handler', mailto.startsWith('mailto:'), true);
-check('and never opens a tab for it — that is what produced a blank about:blank',
-  page.opened.filter((u) => u.startsWith('mailto:')).length, 0);
-check('addressed to the client', decodeURIComponent(mailto).indexOf('mailto:thandi@example.com') === 0, true);
-const mailBody = decodeURIComponent(mailto.split('&body=')[1] || '');
-check('with the signing link already written', mailBody.indexOf(LINK) >= 0, true);
-check('greeting the client by name', /Hi Thandi Mokoena/.test(mailBody), true);
+const gmail = page.opened[page.opened.length - 1] || '';
+check('it opens the webmail composer in a new tab', gmail.startsWith('https://mail.google.com/mail/?view=cm'), true);
+check('addressed to the client', gmail.indexOf('to=thandi%40example.com') >= 0, true);
+check('with a subject line about the signing link', gmail.indexOf('su=Khusela%3A%20your%20signing%20link') >= 0, true);
+const gmailBody = decodeURIComponent(gmail.split('&body=')[1] || '');
+check('with the signing link already written', gmailBody.indexOf(LINK) >= 0, true);
+check('greeting the client by name', /Hi Thandi Mokoena/.test(gmailBody), true);
 check('saying what to do and that signing is once only',
-  /draw your signature/.test(mailBody) && /only sign once/.test(mailBody), true);
-check('and a subject line about the signing link',
-  /subject=Khusela%3A%20your%20signing%20link/.test(mailto), true);
+  /draw your signature/.test(gmailBody) && /only sign once/.test(gmailBody), true);
 check('nothing was sent to the signing service for it', page.notify(), null);
 check('the only thing the service was asked for is the link itself',
   page.calls.filter((c) => /\/api\//.test(c.url)).length, 1);
+check('and no tab was handed a bare mailto: — that is what left about:blank',
+  page.navigated.length, 0);
 check('the consultant is told to press Send there, and what to do if nothing happens',
   /press Send there/.test(page.note(1)) && /Copy Link/.test(page.note(1)), true);
+
+// The other composer, and the mailto: mode behind the same setting.
+const outlook = load({ webmail: 'outlook' });
+await outlook.press('genSig1');
+await outlook.press('mailSig1');
+check('the setting chooses Outlook compose instead',
+  (outlook.opened[0] || '').startsWith('https://outlook.live.com/mail/0/deeplink/compose?to='), true);
+
+const viaMailto = load({ webmail: 'mailto' });
+await viaMailto.press('genSig1');
+await viaMailto.press('mailSig1');
+const mailto = viaMailto.navigated[0] || '';
+check('mailto: mode hands it to the mail handler from this tab', mailto.startsWith('mailto:'), true);
+check('and opens no tab for it, which is what produced a blank about:blank',
+  viaMailto.opened.length, 0);
+check('still addressed to the client with the link in the body',
+  decodeURIComponent(mailto).indexOf('mailto:thandi@example.com') === 0
+    && decodeURIComponent(mailto.split('&body=')[1] || '').indexOf(LINK) >= 0, true);
 
   // An address that is not an address is refused before anything is handed over.
   const noMail = load({ panel: { mail1: 'not-an-address' } });
   await noMail.press('genSig1');
   await noMail.press('mailSig1');
-  check('an address that is not one stops it', noMail.navigated.length, 0);
+  check('an address that is not one stops it', [noMail.opened.length, noMail.navigated.length], [0, 0]);
   check('and says what is missing', noMail.note(1),
     'Enter the client\'s email address in this panel first.');
   check('focusing the box that was wrong', noMail.panelEl('sigMail1').focused, 1);

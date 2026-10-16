@@ -22,4 +22,22 @@ window.ITC_CONFIG = {
   // minute to wake; js/signature.js wakes it with a repeated /health read
   // before the first write, then sends that write exactly once.
   signatureApiBase: 'https://khusela-signature-backend.onrender.com',
+
+  // How "Send via Email" delivers the signing link — see js/signature.js.
+  //
+  // A mailto: is the obvious choice and it is the one that fails most often: it
+  // only works if the machine has a program registered as the mail handler, and
+  // a Windows box with no Outlook configured answers a click with silence. The
+  // webmail composers work in any browser and put the whole draft in front of the
+  // consultant, who presses Send — so they are the default here.
+  //
+  //   'gmail'    mail.google.com compose  (default)
+  //   'outlook'  outlook.live.com compose
+  //   'mailto'   the operating system's own mail app — use this if the office
+  //              has one working and configured, because it keeps the draft in
+  //              the desktop client
+  //
+  // Whatever this says, nothing is sent until the consultant presses Send in that
+  // window: the app only fills it in.
+  mailWebmail: 'gmail',
 };
