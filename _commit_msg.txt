@@ -1,0 +1,9 @@
+Send the signing link by mailto: instead of asking the signing service to mail it.
+
+"Send via Email" in the Client Digital Signing panel now opens the consultant's own mail app with the link written, the client addressed and a subject line set; the consultant presses Send there, exactly as "Send via WhatsApp" is finished with a press in WhatsApp. The reason is the host: the signing service runs on a free Render instance, which blocks outbound traffic to SMTP ports 25, 465 and 587 (Render changelog, 26 September 2025), so it cannot open a connection to any mailbox - a send to smtp-relay.brevo.com timed out there with a key that works from anywhere else. A redirect needs no mailbox, no SMTP port and no provider, and it leaves the message in the consultant's own Sent folder, which is where "the client says they never got it" gets answered.
+
+Also: generating a link no longer demands an email address, only the panel's Name/ID as before - a client who is reachable only on WhatsApp should not have to invent an address to be sent a link they can already receive. And the browser's default should say what the button does, so the two buttons carry a title.
+
+The signing service's /api/notify/email route and its test are removed in that repo rather than left as dead code.
+
+sw.js cache v34 to v35. tools/test_signing_link_node.js now asserts that "Send via Email" produces a mailto: addressed to the client with the link and the instructions in the body, a subject line, no request to the signing service at all, and that an address which is not an address is refused before any window opens.

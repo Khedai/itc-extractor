@@ -265,34 +265,41 @@ function check(label, actual, expected) {
   check('which focuses the box itself', noNumber.panelEl('sigPhone1').focused, 1);
 
   // ── 3. Send via Email: the backend mails it, nothing is pasted ─────────────
-  await page.press('mailSig1');
-  const notify = page.notify();
-  check('the backend is asked to email the link', notify.url, BACKEND + '/api/notify/email');
-  check('by POST', notify.method, 'POST');
-  check('handing over the manage token it already holds', notify.body.manageToken, 'tok-1');
-  check('and the link it is mailing', notify.body.signingLink, LINK);
-  check('naming no recipient of its own — the backend uses the stored address',
-    'to' in notify.body || 'email' in notify.body || 'recipient' in notify.body, false);
-  check('the consultant is told it went, and where', page.note(1),
-    'Signing link emailed to thandi@example.com.');
-  check('with no WhatsApp opened by it', page.opened.length, 1);
+  // ── 3. Send via Email: a redirect, not a server-side send ───────────────────
+await page.press('mailSig1');
+const mailto = page.opened[page.opened.length - 1] || '';
+check('it opens a mailto: rather than posting anywhere', mailto.startsWith('mailto:'), true);
+check('addressed to the client', decodeURIComponent(mailto).indexOf('mailto:thandi@example.com') === 0, true);
+const mailBody = decodeURIComponent(mailto.split('&body=')[1] || '');
+check('with the signing link already written', mailBody.indexOf(LINK) >= 0, true);
+check('greeting the client by name', /Hi Thandi Mokoena/.test(mailBody), true);
+check('saying what to do and that signing is once only',
+  /draw your signature/.test(mailBody) && /only sign once/.test(mailBody), true);
+check('and a subject line about the signing link',
+  /subject=Khusela%3A%20your%20signing%20link/.test(mailto), true);
+check('nothing was sent to the signing service for it', page.notify(), null);
+check('the only thing the service was asked for is the link itself',
+  page.calls.filter((c) => /\/api\//.test(c.url)).length, 1);
+check('and the consultant is told to press Send there', page.note(1),
+  'Your email app opened with the link ready for thandi@example.com — press Send there.');
 
-  // A service with no mailbox answers 503, and must not read as a send.
-  const bare = load({ notify: 'unconfigured' });
-  await bare.press('genSig1');
-  await bare.press('mailSig1');
-  check('a service with no mailbox is reported as a failure, not a send',
-    /no mailbox/i.test(bare.note(1)), true);
-  check('without leaking the service\'s own error code at the consultant',
-    /email_not_configured/.test(bare.note(1)), false);
-  check('and it is styled as an error', /err/.test(bare.noteKind(1)), true);
-  check('pointing at what still works', /Copy Link/.test(bare.note(1)), true);
+  // An address that is not an address is refused before any window opens.
+  const noMail = load({ panel: { mail1: 'not-an-address' } });
+  await noMail.press('genSig1');
+  await noMail.press('mailSig1');
+  check('an address that is not one stops it', noMail.opened.length, 0);
+  check('and says what is missing', noMail.note(1),
+    'Enter the client\'s email address in this panel first.');
+  check('focusing the box that was wrong', noMail.panelEl('sigMail1').focused, 1);
 
-  const refused = load({ notify: 'throw' });
-  await refused.press('genSig1');
-  await refused.press('mailSig1');
-  check('a refused send says what the service said', /mail server refused it/.test(refused.note(1)), true);
-  check('the link is still available to send by hand', refused.link(1), LINK);
+  // A client who only has a number is still fine: the link is made regardless.
+  const waOnly = load({ form: { email: '' } });
+  await waOnly.press('genSig1');
+  check('a link is generated with no email on the form at all', waOnly.link(1), LINK);
+  check('and WhatsApp still works for them', (await (async () => {
+    await waOnly.press('waSig1');
+    return waOnly.opened[0] || '';
+  })()).startsWith('https://wa.me/27821234567?text='), true);
 
   // Neither send button does anything without a link to send.
   const barePanel = load({});

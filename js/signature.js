@@ -6,9 +6,12 @@
 // one per applicant: press "Generate Signing Link" and the app asks the Khusela
 // signature backend for a secure one-time link, shows it and copies it. Then
 // "Send via WhatsApp" opens WhatsApp to the number in that panel with the link
-// pre-typed, "Send via Email" has the backend mail it to the client's address,
-// and "Copy Link" is there for delivering it some other way (a different number,
-// SMS) or when the browser blocks the pop-up. The
+// pre-typed, "Send via Email" opens the consultant's own mail app with the link
+// written and addressed to the client, and "Copy Link" is there for delivering it
+// some other way (a second number, SMS, a call) or when the browser blocks the
+// pop-up. Both sends are a redirect that the consultant completes with one press
+// in WhatsApp or their mail app — neither sends anything by itself.
+// The
 // client opens it on their own device, signs, and the backend stores the
 // signature. This module then finds the captured signature and shows it inside
 // the applicant's box, so it is included in the PDF and the e-mail that follows.
@@ -336,11 +339,9 @@ function render(n, keepNote) {
       note(n, 'Enter the applicant Name, Surname and ID on the form first.', 'err');
       return;
     }
-    if (!EMAIL_RE.test(details.email)) {
-      note(n, 'Enter the client\'s email address in this panel — it is where the link is sent from "Send via Email".', 'err');
-      if (box.mail) box.mail.focus();
-      return;
-    }
+    // No email is demanded here: a link is still perfectly good to send over
+    // WhatsApp, and making the consultant invent an address they do not have
+    // would be the wrong reason to refuse. One is needed only at Send via Email.
 
     const btn = box.gen;
     const gen = generation;
@@ -443,17 +444,21 @@ function render(n, keepNote) {
       : 'The browser blocked the WhatsApp window. Copy Link still works, or open wa.me/' + digits + ' yourself.', opened ? 'ok' : 'err');
   }
 
-  // Send via Email: the backend mails the link to the address already held on
-  // this signing request, so the consultant never has to paste it anywhere.
-  async function sendEmail(n) {
+  // Send via Email: opens the consultant's own mail app with the link already
+  // written, addressed to the client, and they press Send there.
+  //
+  // This is a redirect rather than a call to the signing service, and that is a
+  // decision with a reason behind it: mailing it from a server needs that server
+  // to have a working mailbox, and the only host this app talks to is on a free
+  // Render instance, which blocks outbound SMTP and has no mailbox configured. A
+  // mailto: needs neither — and it keeps the message in the consultant's own
+  // sent folder, which is where a client's "I never got it" question can be
+  // answered. Nothing is sent without the Send press.
+  function sendEmail(n) {
     const s = state[n];
     const box = ui(n);
     if (!s || !s.signingLink) {
       note(n, 'Generate a signing link first.', 'err');
-      return;
-    }
-    if (!s.manageToken) {
-      note(n, 'This signing request cannot be emailed — generate a new link.', 'err');
       return;
     }
     const addr = clientDetails(n).email;
@@ -462,34 +467,26 @@ function render(n, keepNote) {
       if (box.mail) box.mail.focus();
       return;
     }
-    const btn = box.email;
-    busy[n] = true;
-    btn.disabled = true;
-    note(n, 'Emailing the signing link…');
+    const who = clientDetails(n).clientName;
+    const body = 'Hi ' + (who || 'there') + ',\n\n'
+      + 'Please sign your Khusela credit application here — it only takes a moment:\n\n'
+      + s.signingLink + '\n\n'
+      + 'Open that link on your own device, draw your signature with your finger and press submit. '
+      + 'You only sign once.\n\nThank you.';
+    // cc/bcc stay empty: only the client is on this. A mail app that cannot open
+    // a mailto: says so itself, and the link is still in the box above.
+    const url = 'mailto:' + encodeURIComponent(addr)
+      + '?subject=' + encodeURIComponent('Khusela: your signing link')
+      + '&body=' + encodeURIComponent(body);
+    let opened = false;
     try {
-      const d = await api('/api/notify/email', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ manageToken: s.manageToken, signingLink: s.signingLink }),
-      });
-      // accepted:false means the mail server took the message and then dropped
-      // it, which is not a delivery and must not read as one.
-      note(n, d && d.accepted === false
-        ? 'The mail server did not accept the message for ' + addr + ' — use Copy Link.'
-        : 'Signing link emailed to ' + addr + '.', d && d.accepted === false ? 'err' : 'ok');
-    } catch (e) {
-      // The one failure with a known cause: the service has no mailbox set up, so
-      // it never tried. Its own code would reach the consultant as the bare word
-      // "email_not_configured", so it is turned back into a sentence — and into
-      // the advice that still works.
-      const raw = (e && e.message) || '';
-      note(n, /email_not_configured/.test(raw)
-        ? 'This signing service has no mailbox set up, so nothing was emailed — use Copy Link.'
-        : (raw || 'The signing link could not be emailed — use Copy Link.'), 'err');
-    } finally {
-      busy[n] = false;
-      render(n, true);
-    }
+      const w = window.open(url, '_blank');
+      if (w) { try { w.opener = null; } catch (e) {} opened = true; }
+    } catch (e) { opened = false; }
+    note(n, opened
+      ? 'Your email app opened with the link ready for ' + addr + ' — press Send there.'
+      : 'The browser blocked the mail window. Copy Link still works, or write to ' + addr + ' yourself.',
+      opened ? 'ok' : 'err');
   }
 
   // Download the captured signature once, then show it inside the applicant's box.
