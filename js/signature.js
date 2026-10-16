@@ -478,15 +478,22 @@ function render(n, keepNote) {
     const url = 'mailto:' + encodeURIComponent(addr)
       + '?subject=' + encodeURIComponent('Khusela: your signing link')
       + '&body=' + encodeURIComponent(body);
-    let opened = false;
+    // This one navigates the CURRENT tab rather than opening a new one, and that
+    // is not a style choice: Chrome refuses to navigate a new tab to a mailto:
+    // and leaves it sitting blank on about:blank, so window.open('mailto:…')
+    // silently does nothing. Assigning location.href is the way the mail handler
+    // is actually invoked. WhatsApp above keeps _blank, because that URL is
+    // ordinary https and the consultant wants to come straight back to the form.
+    let handed = false;
     try {
-      const w = window.open(url, '_blank');
-      if (w) { try { w.opener = null; } catch (e) {} opened = true; }
-    } catch (e) { opened = false; }
-    note(n, opened
-      ? 'Your email app opened with the link ready for ' + addr + ' — press Send there.'
-      : 'The browser blocked the mail window. Copy Link still works, or write to ' + addr + ' yourself.',
-      opened ? 'ok' : 'err');
+      window.location.href = url;
+      handed = true;
+    } catch (e) { handed = false; }
+    note(n, handed
+      ? 'Your email app should be opening with the link ready for ' + addr + ' — press Send there. '
+        + 'Nothing appears? Use Copy Link and write to ' + addr + ' yourself.'
+      : 'This browser would not open a mail app for a mailto: link. Use Copy Link, or write to ' + addr + ' yourself.',
+      handed ? 'ok' : 'err');
   }
 
   // Download the captured signature once, then show it inside the applicant's box.

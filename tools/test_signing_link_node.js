@@ -63,6 +63,7 @@ function load(opts) {
   const calls = [];
   const opened = [];
   const copied = [];
+  const navigated = [];
   const elements = {};
 
   // The applicant fields. In index.html each of these is ONE element carrying
@@ -143,7 +144,16 @@ function load(opts) {
     clearTimeout: () => {},
     setInterval: () => 2,
     clearInterval: () => {},
-    location: { protocol: 'https:', href: 'https://itc-extractor.test/' },
+    // A mailto: cannot go through window.open — Chrome refuses to navigate a new
+    // tab to a mailto: and leaves it blank — so the module hands it to the mail
+    // handler by assigning location.href, and this stub records that separately
+    // from the popups WhatsApp uses.
+    location: {
+      protocol: 'https:',
+      _href: 'https://itc-extractor.test/',
+      get href() { return this._href; },
+      set href(v) { navigated.push(String(v)); this._href = String(v); },
+    },
     ITC_CONFIG: { signatureApiBase: o.base === undefined ? BACKEND : o.base },
   };
   sandbox.window = sandbox;
@@ -176,7 +186,7 @@ const panelValues = o.panel || {};
   if (o.prefill) sandbox.ITCSignature.prefill();
 
   return {
-    store, calls, opened, copied, elements, fields, window: sandbox,
+    store, calls, opened, copied, navigated, elements, fields, window: sandbox,
     panelEl, formEl,
     // The first request of a session is a /health read that wakes a sleeping
     // instance (see js/signature.js), so the calls are looked up by route rather
@@ -267,8 +277,10 @@ function check(label, actual, expected) {
   // ── 3. Send via Email: the backend mails it, nothing is pasted ─────────────
   // ── 3. Send via Email: a redirect, not a server-side send ───────────────────
 await page.press('mailSig1');
-const mailto = page.opened[page.opened.length - 1] || '';
-check('it opens a mailto: rather than posting anywhere', mailto.startsWith('mailto:'), true);
+const mailto = page.navigated[0] || '';
+check('it hands a mailto: to the mail handler', mailto.startsWith('mailto:'), true);
+check('and never opens a tab for it — that is what produced a blank about:blank',
+  page.opened.filter((u) => u.startsWith('mailto:')).length, 0);
 check('addressed to the client', decodeURIComponent(mailto).indexOf('mailto:thandi@example.com') === 0, true);
 const mailBody = decodeURIComponent(mailto.split('&body=')[1] || '');
 check('with the signing link already written', mailBody.indexOf(LINK) >= 0, true);
@@ -280,14 +292,14 @@ check('and a subject line about the signing link',
 check('nothing was sent to the signing service for it', page.notify(), null);
 check('the only thing the service was asked for is the link itself',
   page.calls.filter((c) => /\/api\//.test(c.url)).length, 1);
-check('and the consultant is told to press Send there', page.note(1),
-  'Your email app opened with the link ready for thandi@example.com — press Send there.');
+check('the consultant is told to press Send there, and what to do if nothing happens',
+  /press Send there/.test(page.note(1)) && /Copy Link/.test(page.note(1)), true);
 
-  // An address that is not an address is refused before any window opens.
+  // An address that is not an address is refused before anything is handed over.
   const noMail = load({ panel: { mail1: 'not-an-address' } });
   await noMail.press('genSig1');
   await noMail.press('mailSig1');
-  check('an address that is not one stops it', noMail.opened.length, 0);
+  check('an address that is not one stops it', noMail.navigated.length, 0);
   check('and says what is missing', noMail.note(1),
     'Enter the client\'s email address in this panel first.');
   check('focusing the box that was wrong', noMail.panelEl('sigMail1').focused, 1);
