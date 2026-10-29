@@ -12,7 +12,7 @@
   <link rel="stylesheet" href="css/styles.css">
 </head>
 <body>
-
+ 
   <!-- Toolbar -->
   <div class="toolbar">
     <button type="button" class="btn green" id="btnTracker">✅ Submit to Tracker</button>
@@ -23,10 +23,10 @@
     <button type="button" class="btn secondary" id="btnReset">New Application</button>
   </div>
   <div class="draft-note">Drafts are autosaved on this device only &mdash; never uploaded, never downloadable.</div>
-
+ 
   <!-- Result feedback (email / status) -->
   <div class="result-panel" id="resultPanel"></div>
-
+ 
   <!-- Sending overlay — shown while the PDF is rendered/compressed and emailed -->
   <div class="send-overlay" id="sendOverlay" aria-hidden="true" role="dialog" aria-modal="true" aria-label="Preparing and sending your email">
     <div class="send-box">
@@ -37,7 +37,7 @@
       <div class="send-hint" id="sendHint"></div>
     </div>
   </div>
-
+ 
   <!-- The application form — fields match the original Khusela application -->
   <div class="page" id="formPage">
     <div class="top">
@@ -52,14 +52,14 @@
         <label>Ref: <input type="text" id="fAppRef" name="app_ref"></label>
       </div>
     </div>
-
+ 
     <div class="app-type"><label>Application Type:</label>
       <select name="application_type">
         <option>Mediation</option><option>Debt Review</option><option>Debt Review Removal</option><option>DM/DRRR</option>
       </select>
       <label style="margin-left:auto">Branch:</label><input style="width:235px" name="branch">
     </div>
-
+ 
     <!-- ITC extraction (app chrome — never included in the emailed PDF) -->
     <div class="itc-panel">
       <div class="itc-title">ITC REPORT IMPORT &amp; EXTRACTION</div>
@@ -74,7 +74,7 @@
       </div>
       <div id="itcStatus" class="itc-status">Select the client's Datanamix ITC PDF and enter the password &mdash; or just type the form in by hand if you have no report to extract.</div>
     </div>
-
+ 
     <!-- ITC report details — on-screen only, never in the emailed PDF -->
     <div class="itc-review" id="itcReview">
       <div class="section-title">ITC Report Details</div>
@@ -105,7 +105,7 @@
         you have no report to extract. These details stay on this screen only: they are
         never printed and never included in the emailed PDF.</div>
     </div>
-
+ 
     <div class="section">
       <div class="section-title">Applicant Details:</div>
       <div class="personal">
@@ -130,7 +130,7 @@
         </div>
       </div>
     </div>
-
+ 
     <div class="details">
       <div>
         <div class="field"><label>Employer:</label><input id="employer" name="employer"></div>
@@ -141,18 +141,18 @@
         <div class="field"><label>Account no.:</label><input name="account_no"></div>
       </div>
       <div>
-        <div class="field"><label>Marital Status:</label><select name="marital_status"><option>Single</option><option>Married</option><option>Married COP</option><option>Divorced</option><option>Widowed</option></select></div>
+        <div class="field"><label>Marital Status:</label><select name="marital_status"><option>Single</option><option>Married</option><option>Married COP</option><option>Divorced</option><option>Widowed</option><option>Separated</option></select></div>
         <div class="field"><label>Account Type:</label><select name="account_type"><option>Savings</option><option>Cheque</option><option>Transaction</option></select></div>
       </div>
     </div>
-
+ 
     <div class="income-docs">
       <div class="income">
         <div class="section-title">Income:</div>
         <div class="field"><label>Gross Salary:</label><input class="money" name="gross_salary" type="number" step="0.01"></div>
         <div class="field"><label>Nett Salary:</label><input class="money" name="nett_salary" type="number" step="0.01"></div>
         <div class="field"><label>Spouse Salary:</label><input class="money" name="spouse_salary" type="number" step="0.01"></div>
-        <div class="field"><label>DR Status:</label><select name="dr_status"><option>A</option><option>A1</option><option>B</option><option>C</option><option>D3</option><option>D4</option><option>F1</option><option>F2</option><option>G</option><option>G1</option><option>H</option><option>I</option><option>J</option></select></div>
+        <div class="field"><label>DR Status:</label><select name="dr_status"><option>A</option><option>A1</option><option>B</option><option>C</option><option>D3</option><option>D4</option><option>F</option></select></div>
       </div>
       <div class="docs">
         <div class="section-title">DOCS</div>
@@ -163,12 +163,12 @@
         </div>
       </div>
     </div>
-
+ 
     <div class="main">
       <div class="loans">
         <div class="section-title">Loans And Accounts</div>
         <table id="loans">
-          <thead><tr><th class="rowno">#</th><th class="creditor">Creditor</th><th class="acc">Acc Num/Ref</th><th class="bal">Balance of Acc</th><th class="cur">Current Instalment</th><th class="red">Reduced Instalment</th><th class="atype">Account Type</th></tr></thead>
+          <thead><tr><th class="rowno">#</th><th class="creditor">Creditor</th><th class="acc">Acc Num/Ref</th><th class="bal">Balance of Acc</th><th class="cur">Current Instalment</th><th class="red">Reduced Instalment</th><th class="type">Type</th></tr></thead>
           <tbody></tbody>
           <tfoot><tr class="total"><td colspan="3" style="text-align:right">TOTALS</td><td id="totalBalance">R 0.00</td><td id="totalCurrent">R 0.00</td><td id="totalReduced">R 0.00</td><td></td></tr></tfoot>
         </table>
@@ -176,8 +176,8 @@
       <div class="side">
         <div class="debit">
           <div class="field"><label>Debit Order Date:</label><input class="date" type="date" name="debit_order_date"></div>
-          <div class="field amount"><label>Own Amount:</label><input id="ownAmount" name="own_amount" class="money" type="number" step="0.01" min="0"></div>
-          <div class="field amount"><label>Debit Order Amount:</label><input id="debitOrderAmount" name="debit_order_amount" readonly></div>
+          <div class="field amount"><label>Debit Order Amount:</label><input id="ownAmount" name="own_amount" class="money" type="number" step="0.01" min="0"></div>
+          <div class="field amount"><label>Suggested amount:</label><input id="debitOrderAmount" name="debit_order_amount" readonly></div>
         </div>
         <div class="signature">
           <div class="section-title">Signature:</div>
@@ -194,7 +194,7 @@
         </div>
       </div>
     </div>
-
+ 
     <div class="expense-consent">
       <div class="expenses">
         <div class="section-title">Expenses:</div>
@@ -208,23 +208,23 @@
       </div>
       <div class="consent">
         <div class="consent-box">
-          I hereby consent to allow KHUSELA DEBT MANAGEMENT to debit my bank account for payments due under this contract. I understand that I will be required to authorize a debit order through the Debi-Check process. If I fail to authorize the Debi-Check process within the specified time frame, I acknowledge that KHUSELA DEBT MANAGEMENT will automatically raise a debit order against my account. I confirm that I have read and understood this consent and the terms of the Debi-Check process.
+          I hereby consent to allow KHUSELA DEBT MANAGEMENT to debit my bank account for payments due under this contract. I understand that I will be required to authorize a debit order through this agreement.
         </div>
       </div>
     </div>
-
+ 
     <div class="footer">
       <span>Time of call: <input type="text" name="call_time"></span>
       <span>EXT number: <input type="text" name="ext_number"></span>
       <span class="checkline"><label>CPI <input type="checkbox" name="cpi"></label><label>CELL PHONE <input type="checkbox" name="cell_phone"></label><label>OTHER <input type="checkbox" name="other"></label></span>
     </div>
   </div>
-
+ 
   <!-- Client Digital Signing ─────────────────────────────────────────────────
        One panel per applicant, holding every control for that applicant's
        signing link: generate it, then send it by WhatsApp or e-mail, or copy it
        to deliver it some other way.
-
+ 
        Deliberately OUTSIDE #formPage: the panels are app chrome, so they can
        never end up inside the PDF or the printed application. Only the captured
        signature — an <img> inside the .sigbox above — belongs to the form. -->
@@ -263,11 +263,11 @@
       <div class="sig-note" id="sigNote2"></div>
     </section>
   </div>
-
+ 
   <!-- Hidden email transport -->
   <iframe id="emailFrame" name="emailFrame" style="display:none" title="email"></iframe>
   <form id="emailForm" target="emailFrame" method="POST" style="display:none"></form>
-
+ 
   <!-- PWA registration -->
   <script>
     if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol)) {
@@ -295,7 +295,7 @@
       });
     }
   </script>
-
+ 
   <script src="vendor/pdf.min.js"></script>
   <script src="vendor/html2canvas.min.js"></script>
   <script src="vendor/jspdf.umd.min.js"></script>
@@ -309,7 +309,3 @@
   <script src="js/app.js"></script>
 </body>
 </html>
-
-
-
-
