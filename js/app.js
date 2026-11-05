@@ -58,7 +58,7 @@
   const SEND_TIPS = [
     'This can take up to a minute on slower connections — keep this page open.',
     'Your draft is saved on this device. If anything fails you can simply press Submit & Email again.',
-    'The recipient receives the completed form as a PDF attachment.',
+    'The Khusela office receives the completed form as a PDF — attached, or by a secure link when the mail provider cannot carry attachments.',
   ];
   let sendTipTimer = null;
 
@@ -328,12 +328,11 @@
     return prefix + '-' + new Date().toISOString().split('T')[0] + '.pdf';
   }
 
-  // The ceiling the email actually has: js/email.js reports 20 MB when the app
-  // sends through the Khusela backend (js/config.js signatureApiBase) and the
-  // 10 MB FormSubmit always insisted on when it does not. Keeping the number and
-  // the wording in one place is why the export exists at all.
-  const MAX_ATTACH_BYTES = (window.ITCEmail && window.ITCEmail.MAX_ATTACHMENT_BYTES) || 10 * 1024 * 1024;
-  const MAX_ATTACH_MB = (window.ITCEmail && window.ITCEmail.MAX_ATTACHMENT_MB) || 10;
+  // The ceiling the email actually has: js/email.js reports the backend's 20 MB
+  // limit. The fallback matches it, so a missing script cannot silently turn into
+  // a smaller, wrong limit.
+  const MAX_ATTACH_BYTES = (window.ITCEmail && window.ITCEmail.MAX_ATTACHMENT_BYTES) || 20 * 1024 * 1024;
+  const MAX_ATTACH_MB = (window.ITCEmail && window.ITCEmail.MAX_ATTACHMENT_MB) || 20;
 
   async function generatePdf(opts) {
     return await window.ITCPdf.generate($('formPage'), opts);
@@ -366,7 +365,7 @@
       }
       const filename = makeFilename();
       btn.textContent = 'Sending email…';
-      showSending('Sending your email…', 'Uploading the PDF to the email service', SEND_TIPS[0]);
+      showSending('Sending your email…', 'Uploading the PDF to the office server', SEND_TIPS[0]);
       startSendTips();
       const res = await window.ITCEmail.send(blob, filename, CONFIG);
       hideSending();

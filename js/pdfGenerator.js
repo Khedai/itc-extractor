@@ -68,8 +68,8 @@
     return rows;
   }
 
-  // opts: { scale, quality } — lower both to shrink the output when it would
-  // exceed FormSubmit's 10 MB attachment limit (see js/email.js / js/app.js).
+  // opts: { scale, quality } - lower both to shrink the output when it would
+  // exceed the backend's 20 MB email attachment limit (see js/email.js / js/app.js).
   async function generate(elm, opts) {
     if (!window.html2canvas || !window.jspdf) {
       throw new Error('PDF libraries failed to load. Check that vendor/ files are present.');

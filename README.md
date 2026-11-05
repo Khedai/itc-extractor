@@ -55,9 +55,9 @@ Then open <http://localhost:8080>.
    client is signing remotely, send a signature request (see
    [Signature requests](#signature-requests-remote-signing)).
 3. **Submit** — click **Submit & Email**. The form is rendered to a multi-page
-   A4 PDF, stored in the office's report bucket, and sent to the configured
-   address. If the email cannot be delivered, the screen says so and the PDF is
-   still in the bucket.
+   A4 PDF, stored in the office's report bucket, and sent to the office address
+   configured on the backend. If the email cannot be delivered, the screen says
+   so and the PDF is still in the bucket.
 4. **Track** — press **✅ Submit to Tracker**. The application is appended to
    the on-device sales tracker and the full tracker downloads as
    **Khusela_Sales_Tracker.xlsx** (a real Excel workbook). Press **📊 Export
@@ -117,7 +117,7 @@ service has been configured** — with `signatureApiBase` left empty they are hi
 and the app behaves exactly as it always has.
 
 1. Point the app at the backend in `js/config.js` (see
-   [Configure the email recipient](#configure-the-email-recipient)):
+   [Configure email delivery](#configure-email-delivery)):
 
    ```js
    signatureApiBase: 'https://api.your-domain.co.za',   // <-- here
@@ -218,47 +218,55 @@ using** — they never leave that device:
 The only data stored in the repo / git history is the app code — never any
 report or applicant data.
 
-## Configure the email recipient
+## Configure email delivery
 
-The address the office receives applications at is set **on the backend**
-(`MAIL_TO` in `khusela-signature-backend`), which is the path that actually
-delivers. `js/config.js` still carries `recipientEmail` for the FormSubmit path
-(used only when no backend is configured):
+The address the office receives applications at is **not in this app**. The
+backend owns it with `MAIL_TO` for SMTP/Brevo, and the Formspree form owns its own
+fixed recipient. Nothing in a browser request can name a recipient.
+
+`js/config.js` therefore only needs the backend base URL:
 
 ```js
 window.ITC_CONFIG = {
-  recipientEmail: 'khuselamanagement@gmail.com',  // <-- the FormSubmit address
-  subject: 'Khusela Credit Application - ITC report',
   fileNamePrefix: 'Khusela-Credit-Application',
-  signatureApiBase: '',  // the backend; it also carries the email — see below
+  signatureApiBase: 'https://khusela-signature-backend.onrender.com',
+  mailWebmail: 'gmail',
 };
 ```
 
-Email travels by one of **two paths**, and the message on screen always says which
-one carried the application.
+**Submit & Email** POSTs the PDF to `<signatureApiBase>/api/email` as
+`multipart/form-data` (field `attachment`). The backend **stores the PDF in its
+report bucket before it tries to send**, then delivers over:
 
-1. **The Khusela backend** — `POST <signatureApiBase>/api/email`, the same Render
-   service the Signature section uses. It **stores the PDF in its report bucket
-   first**, then mails it and answers with a real HTTP status, which is what lets
-   **Submit & Email** report the truth. It delivers over **SMTP** (its own
-   mailbox, for a paid host), **Brevo over HTTPS** (the free-plan path that keeps
-   the PDF attached), or **Formspree over HTTPS** (whose free plan has no file
-   uploads, so the email carries a secure expiring link instead) — see
-   `khusela-signature-backend`. The recipient is the backend's own setting and
-   nothing in the request can name one. Used whenever `signatureApiBase` is set,
-   and it is the **only** path used then: if delivery is missing (503) or fails
-   (502) the PDF is still in the bucket and the message says so.
-2. **FormSubmit.co** — the original no-backend service, kept **only** for a
-   deployment with no `signatureApiBase` configured. Its answer cannot be read,
-   so a message from this path says delivery cannot be confirmed.
+1. **SMTP** — only where outbound SMTP actually works (a paid host, VPS, or local
+   development). Render's free tier blocks ports 25/465/587.
+2. **Brevo over HTTPS** — the recommended free path that keeps the PDF attached
+   (300 messages a day, attachments up to 25 MB).
+3. **Formspree over HTTPS** — the form the office already has. Its free plan
+   refuses file uploads, so the email carries a secure, expiring download link
+   instead of the attachment.
 
-### Every application is now backed up — the report bucket
+The message on screen is decided by the backend's HTTP status, not by a guess:
+
+| Status | What the consultant is told |
+|---|---|
+| `200` | Emailed to the office — with the PDF attached, or with a secure link when `linkOnly` is set. |
+| `503` + `stored:true` | Saved to the report bucket, **not emailed**; no delivery path is configured. |
+| `502` + `stored:true` | Every configured provider refused; the PDF is safe in the bucket; tell the office and retry. |
+| `429` | Rate limited; nothing sent; wait and retry. |
+| `401` / `403` | This app is not on the service's approved-origin list. |
+| No answer / timeout | Not sent or saved; the draft remains on this device; retry. |
+
+There is **no FormSubmit fallback**. If `signatureApiBase` is empty, the app
+refuses the send and says email is not configured rather than claiming delivery.
+
+### Every application is backed up — the report bucket
 
 `POST /api/email` writes the PDF into the backend's database **before** it tries
 to email it, whatever happens next. That is the "bucket": a report that never
-reached the office's inbox — no mailbox configured, a refused message, a missed
-spam folder — can still be pulled out afterwards. The office reads it with the
-backend's admin endpoints (the `ADMIN_API_KEY` set on the service):
+reached the office's inbox — no delivery path configured, a refused message, a
+missed spam folder — can still be pulled out afterwards. The office reads it with
+the backend's admin endpoints (the `ADMIN_API_KEY` set on the service):
 
 ```http
 GET /api/admin/submissions            # list, newest first (id, filename, email_status, …)
@@ -268,9 +276,12 @@ POST /api/admin/submissions/:id/resend# re-send a backed-up report once delivery
 ```
 
 The office reads it with the **admin page** at `https://<service>/admin` — a list
-of every submission with a **Download PDF** button (and a **Resend** button for the
-ones that never made it out), all gated by the `ADMIN_API_KEY`. It is admin-only:
-a consultant's shared PWA screen can never open it.
+of every submission with the applicant's **name, ID number, signer label and
+application date**, plus a **Download PDF** button (and a **Resend** button for
+the ones that never made it out), all gated by the `ADMIN_API_KEY`. The signer
+label comes from whichever applicant box(es) hold a signature (`Applicant 1`,
+`Applicant 2`, or both), so a backed-up report can be matched to its signer. It
+is admin-only: a consultant's shared PWA screen can never open it.
 
 `email_status` says which case it was: `sent` (also emailed), `not_configured`
 (no delivery path set up), or `failed` (every path refused it). So an application
@@ -280,63 +291,29 @@ When Formspree's free plan refuses the attachment, the email still goes out with
 a signed, expiring download link; it is never a public link and never appears in
 the PWA.
 
+**Old submissions are unrecoverable.** Reports sent before the report bucket
+existed — the FormSubmit era — were never stored here. If that email did not
+arrive, there is no copy on the backend to recover; only the email itself, if it
+reached the office, remains.
+
 **Why the backend path exists:** on 2026-09-30 FormSubmit answered every
 submission with **HTTP 500** — its own documentation page did too — and again on
-2026-11-05 it answered **HTTP 522**. The app posts through a hidden cross-origin
-iframe and cannot read that answer, so it reported success while no application
-arrived. Sending from the backend removed the third party and made the outcome
+2026-11-05 it answered **HTTP 522**. The app posted through a hidden cross-origin
+iframe and could not read that answer, so it reported success while no application
+arrived. The old path has been removed. Sending from the backend made the outcome
 visible, and storing in the bucket first made the outcome recoverable. The backend
-side of this is documented in `khusela-signature-backend/README.md` (set `MAIL_TO`
-and either `BREVO_API_KEY` + `BREVO_SENDER` or `FORMSPREE_ENDPOINT`; until then the
-route answers 503 and the PDF is still kept in the bucket).
+side is documented in `khusela-signature-backend/README.md` (set `MAIL_TO` and
+either `BREVO_API_KEY` + `BREVO_SENDER`, `FORMSPREE_ENDPOINT`, or SMTP details;
+until then the route answers 503 and the PDF is still kept in the bucket).
 
-The filled form is attached to the email as a **PDF** (field `attachment`). The
-limit is **20 MB** through the backend (`MAX_EMAIL_MB` there) and **10 MB** through
-the FormSubmit path; the app auto-compresses the PDF once and refuses to post
-anything larger, naming the limit that applies.
+The filled form is attached to the email as a **PDF** (field `attachment`), or
+delivered by a secure link when the provider cannot carry the file. The limit is
+**20 MB** (`MAX_EMAIL_MB` on the backend); the app auto-compresses the PDF once
+and refuses to post anything larger, naming that limit.
 
-### The FormSubmit path posts a real form — never switch this to fetch()
-
-That applies to path 2 only (the backend path is a plain `fetch()` with `FormData`,
-because it is a JSON-answering API). `js/email.js` submits the hidden form that
-lives in `index.html` (`#emailForm` →
-`#emailFrame`, `enctype="multipart/form-data"`, with a real file input named
-`attachment`), so the browser performs a **genuine form POST**. FormSubmit keeps
-uploaded files **only** for a real form post: a `fetch()`/XHR submission is
-treated as AJAX — the notification email still arrives, **but the PDF is
-silently dropped** (and its docs advertise no file support on `/ajax/` at all).
-This trap was fallen into twice in this project's history, so the transport is
-deliberately a plain form. Consequence: FormSubmit's reply renders inside the
-hidden frame and cannot be read, so a message from that path is plain rather than
-reporting the form's activation state.
-
-### First send = activation (FormSubmit-only — why you may only see a "form submission" notification)
-
-This applies **only** when there is no backend configured and the app is still
-posting through FormSubmit. The **first** submission to a new recipient address
-does **not** deliver the PDF. FormSubmit emails the recipient a one-time
-**activation / notification** email instead, and the recipient must click the
-**activation link** inside it. From then on, every submission arrives with the PDF
-attached. If the only email you ever received was a "form submission"
-notification, that was this activation email — click its link, then press
-**Submit & Email** again.
-
-### "From" and replying
-
-FormSubmit sends from its own generic address — the sender **cannot** be
-customised with this service. The app sets **Reply-To** to the applicant's email
-address (field `email` / `_replyto`), so replying to the notification in your mail client
-goes straight back to the applicant. The email body also lists the applicant's
-name, ID number and date so the notification itself is useful.
-
-FormSubmit advertises **unlimited forms and submissions** — there is no
-published daily or monthly cap — but every submission is limited to **10 MB** of
-attachments and the service spam-filters submissions, so very high volumes can
-occasionally be throttled.
-
-- If the address is left empty (or sending fails / there's no internet),
-  **nothing is sent and nothing is downloaded** — the draft stays autosaved in
-  the browser, ready to retry.
+- If the backend is unreachable (or there is no internet), **nothing is sent or
+  saved** and the message says so — the draft stays autosaved in the browser,
+  ready to retry.
 
 ## Deploy on Vercel
 
@@ -384,11 +361,11 @@ khusela-itc-pwa/
 ├── index.html          # the form + ITC panel + toolbar
 ├── css/styles.css      # form + extractor styling
 ├── js/
-│   ├── config.js       # email recipient / subject / filename
+│   ├── config.js       # backend URL / filename / mail window
 │   ├── itcParser.js    # Datanamix report text parser (pure)
 │   ├── extractor.js    # pdf.js reading + password handling
 │   ├── pdfGenerator.js # form → A4 PDF (html2canvas + jsPDF)
-│   ├── email.js        # FormSubmit email send (no download)
+│   ├── email.js        # backend email send (no download)
 │   ├── tracker.js      # Khusela Sales Tracker (browser XLSX tracker)
 │   ├── signature.js    # remote signing requests (link, status, signature)
 │   └── app.js          # wiring: extract, fill, submit, reset
@@ -421,7 +398,7 @@ node tools/test_tracker_node.js
 
 The email routing has its own plain-Node test. It loads `js/email.js` into a stub
 browser scope, so it can say exactly which request goes out and what is in it, and
-whether the hidden FormSubmit form was used at all:
+that no FormSubmit or hidden form remains:
 
 ```bash
 node tools/test_email_node.js
@@ -430,9 +407,9 @@ node tools/test_email_node.js
 > This is the test that would have caught the September 2026 outage, in which
 > FormSubmit answered every submission with a 500 and the app still reported
 > success. It fails if a refusal from the mail service (502, 429, 401/403) is ever
-> answered as a success again, if a 503 / unreachable service stops falling back,
-> if the recipient is ever taken from the request instead of the service's own
-> setting, or if the PDF stops travelling in the `attachment` field.
+> answered as a success again, if a 503 / unreachable service is ever reported as
+> delivered, if the recipient is ever taken from the request instead of the
+> service's own setting, or if the PDF stops travelling in the `attachment` field.
 
 The service worker's caching strategy has a plain-Node test too — it drives
 `sw.js` in a stub scope, so a page that a deploy should have replaced cannot go

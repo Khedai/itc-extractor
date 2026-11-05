@@ -1,27 +1,27 @@
 // ── App configuration ─────────────────────────────────────────────
-// Set the recipient address below. When empty, "Submit & Email" won't send
-// anything — the draft stays autosaved in the browser, ready to retry.
+// The office recipient is NOT set here. It belongs to the backend
+// (MAIL_TO in khusela-signature-backend), so a copied request cannot name a
+// different address.
+//
+// signatureApiBase is required for "Submit & Email" and for the signing links.
+// With it empty the app still opens and drafts/prints, but it refuses to send
+// and says email is not configured — it never claims delivery.
 window.ITC_CONFIG = {
-  recipientEmail: 'khuselamanagement@gmail.com',
-  subject: 'Khusela Credit Application - ITC report',
   fileNamePrefix: 'Khusela-Credit-Application',
-  // Base URL of the Khusela signature backend (khusela-backend), with no
-  // trailing slash — the Render service created for this PWA. While this is
-  // empty the application works exactly as before: the Signature section stays
-  // a plain pair of boxes and no signing requests can be sent. This site's
-  // address (https://itc-extractor.vercel.app) is already in the backend's
+  // Base URL of the Khusela signature backend, with no trailing slash — the
+  // Render service created for this PWA. This site's address
+  // (https://itc-extractor.vercel.app) is already in the backend's
   // ALLOWED_ORIGINS, so the requests below are accepted from here.
   //
-  // js/email.js uses this same base: "Submit & Email" sends the finished PDF to
-  // <signatureApiBase>/api/email, which stores it in the office's report bucket
-  // first, then mails it from the office's own mailbox and answers with a real
-  // status. If the mailbox is missing (503) or refuses the message (502) the PDF
-  // is still in the bucket and the message on screen says so — it does not fall
-  // back to FormSubmit any more.
+  // "Submit & Email" POSTs the finished PDF to <signatureApiBase>/api/email.
+  // That service stores it in the office's report bucket first, then delivers it
+  // over SMTP, Brevo or Formspree and answers with a real status. The app shows
+  // exactly what that status says — emailed, saved-but-not-emailed, refused, or
+  // unreachable — and there is no FormSubmit fallback.
   //
   // The free Render instance sleeps after ~15 minutes idle and takes up to a
-  // minute to wake; js/signature.js wakes it with a repeated /health read
-  // before the first write, then sends that write exactly once.
+  // minute to wake; js/signature.js wakes it with a repeated /health read before
+  // the first write, then sends that write exactly once.
   signatureApiBase: 'https://khusela-signature-backend.onrender.com',
 
   // How "Send via Email" delivers the signing link — see js/signature.js.
