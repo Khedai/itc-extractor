@@ -213,68 +213,56 @@ const parts = (r) => (r.sent[0] ? [...r.sent[0].form.keys()] : []);
   check('the backend path allows 20 MB', good.email.MAX_ATTACHMENT_BYTES, 20 * 1024 * 1024);
   check('which is the figure app.js quotes, in MB', good.email.MAX_ATTACHMENT_MB, 20);
 
+  // When Formspree's free plan refuses the PDF, the backend still emails the
+  // office with a secure link. The message must not claim a file was attached.
+  const linkSent = load(CFG, () => ({ status: 200, body: { ok: true, stored: true, linkOnly: true } }));
+  const linkRes = await linkSent.email.send(pdfBlob(2048), 'app.pdf', CFG);
+  check('a link-only delivery is still reported as sent', sentTo(linkRes), { ok: true, reason: 'sent' });
+  check('and the message says the email carries a secure link',
+    /secure link to the completed PDF/.test(linkRes.msg), true);
+  check('and never says the PDF was attached when it was not',
+    /attached/.test(linkRes.msg), false);
 
-  // ── 2. A service with no mailbox hands over to the old path ───────────────
-  // 503 email_not_configured means nothing was attempted, so the application can
-  // still go through FormSubmit — and the message must say that is what happened,
-  // because that path can never confirm delivery.
-  const noMailbox = load(CFG, () => ({ status: 503, body: { error: 'email_not_configured' } }));
+
+  // ── 2. A service with no mailbox stores the PDF in the bucket ─────────────
+  // 503 email_not_configured + stored:true means the PDF is safe in the office's
+  // report bucket even though nothing was emailed — so there is no FormSubmit
+  // fallback any more, and the message says so honestly.
+  const noMailbox = load(CFG, () => ({ status: 503, body: { error: 'email_not_configured', stored: true } }));
   const noMailboxRes = await noMailbox.email.send(pdfBlob(2048), 'app.pdf', CFG);
 
-  check('a service with no mailbox falls back to FormSubmit', noMailbox.formPosts.length, 1);
-  check('which posts to the configured address', post(noMailbox).action,
-    FORMSUBMIT + encodeURIComponent(OFFICE));
-  check('as a POST', post(noMailbox).method, 'POST');
-  check('multipart, the encoding FormSubmit keeps files for',
-    post(noMailbox).enctype, 'multipart/form-data');
-  check('into the hidden frame', post(noMailbox).target, 'emailFrame');
-  check('with FormSubmit\'s own field names',
-    post(noMailbox).fields.map(([n]) => n),
-    ['_subject', '_template', '_captcha', '_url', 'email', '_replyto', 'Applicant', 'ID Number', 'Date']);
-  check('a captcha is not demanded of a JS-driven send',
-    field(post(noMailbox), '_captcha'), 'false');
-  check('the posting page is named', field(post(noMailbox), '_url'),
-    'https://itc-extractor.test/');
-  check('the PDF is the real attachment field', post(noMailbox).attachment.length, 1);
-  check('with its filename intact',
-    (post(noMailbox).attachment[0] || {}).name, 'app.pdf');
-  check('the applicant is the reply address',
-    field(post(noMailbox), '_replyto'), 'thandi@example.test');
-  check('the applicant is named in the body',
-    field(post(noMailbox), 'Applicant'), 'Thandi Mokoena');
-  check('so an application can still go out today', sentTo(noMailboxRes),
-    { ok: true, reason: 'sent_backup' });
-  check('the message says only that it was submitted',
-    /^Application submitted\./.test(noMailboxRes.msg), true);
-  check('and asks the consultant to confirm it arrived, because nothing here can',
-    /check with the office that it arrived/.test(noMailboxRes.msg), true);
-  check('and names no email provider at all — a consultant has no use for one',
-    /FormSubmit|backup email service|own mail service/.test(noMailboxRes.msg), false);
+  check('a service with no mailbox does NOT fall back to FormSubmit', noMailbox.formPosts.length, 0);
+  check('the send is reported as not emailed', sentTo(noMailboxRes), { ok: false, reason: 'stored_not_emailed' });
+  check('the result says the PDF was stored', noMailboxRes.stored, true);
+  check('the consultant is told it was saved to the report bucket', /report bucket/.test(noMailboxRes.msg), true);
+  check('and that it was not emailed', /not emailed/.test(noMailboxRes.msg), true);
+  check('and names no email provider at all — a consultant has no use for one', /FormSubmit|backup email service|own mail service/.test(noMailboxRes.msg), false);
 
   // A service that accepts the connection and then goes quiet (the free instance
-  // sleeps) is the other state the old path exists for: it looks like a hang, and
-  // the timeout is what turns it into a decision.
+  // sleeps) is unreachable: nothing can be stored there, so the message says to
+  // retry rather than claiming anything was sent.
   const asleep = load(CFG, () => 'hang');
   const asleepSend = asleep.email.send(pdfBlob(2048), 'app.pdf', CFG);
   asleep.flushTimers();            // the 120 s upload timeout, reached instantly
   const asleepRes = await asleepSend;
 
-  check('a service that never answers falls back too', asleep.formPosts.length, 1);
-  check('the send still succeeds', sentTo(asleepRes), { ok: true, reason: 'sent_backup' });
-  check('and does not tell the consultant about the plumbing behind it at all',
-    /own mail service|did not answer|could not be reached/.test(asleepRes.msg), false);
-  check('the submission still reads as submitted', /submitted/i.test(asleepRes.msg), true);
+  check('a service that never answers does not fall back either', asleep.formPosts.length, 0);
+  check('the send fails honestly', sentTo(asleepRes), { ok: false, reason: 'timeout' });
+  check('and tells them the draft is still saved', /draft is still saved/.test(asleepRes.msg), true);
+  check('and asks for a retry', /try again/.test(asleepRes.msg), true);
 
   // ── 3. A message the service tried and could not deliver is NOT hidden ─────
   // This is the September failure itself: a refusal that reached the consultant as
-  // a success. A wrong mailbox password arrives as a 502 exactly like this one.
-  const refused = load(CFG, () => ({ status: 502, body: { error: 'The application could not be emailed: Invalid login: 535-5.7.8' } }));
+  // a success. A wrong mailbox password arrives as a 502 exactly like this one —
+  // and now it also carries stored:true, because the PDF is safe in the bucket.
+  const refused = load(CFG, () => ({ status: 502, body: { error: 'The application could not be emailed: Invalid login: 535-5.7.8', stored: true } }));
   const refusedRes = await refused.email.send(pdfBlob(2048), 'app.pdf', CFG);
 
   check('a refusal is a failure', sentTo(refusedRes), { ok: false, reason: 'refused' });
   check('and is not quietly retried through FormSubmit', refused.formPosts.length, 0);
   check('exactly one attempt was made', refused.sent.length, 1);
-  check('the consultant is told it was NOT submitted', /NOT submitted/.test(refusedRes.msg), true);
+  check('the consultant is told it was NOT emailed', /NOT emailed/.test(refusedRes.msg), true);
+  check('and that it is safe in the report bucket', /report bucket/.test(refusedRes.msg), true);
   check('and told to tell the office, which is the only thing they can act on',
     /tell the office/.test(refusedRes.msg), true);
   // The raw SMTP code says "535-5.7.8" to whoever fixes the service and nothing
@@ -309,18 +297,18 @@ const parts = (r) => (r.sent[0] ? [...r.sent[0].form.keys()] : []);
   check('and points at the office, not the applicant',
     /not on their list of approved sites/.test(refusedAppRes.msg), true);
 
-  // No status at all is the one failure that has to fall back: an unreachable
-  // service is also what a blocked origin and a sleeping instance look like, and
-  // the old path can still carry the application.
+  // No status at all: the service is unreachable, so nothing can be stored there.
+  // The only copy is still on the device, and the message points at the Download
+  // PDF escape hatch rather than pretending the old path carried it.
   const unreachable = load(CFG, () => new TypeError('fetch failed'));
   const unreachableRes = await unreachable.email.send(pdfBlob(2048), 'app.pdf', CFG);
 
-  check('an unreachable service falls back', unreachable.formPosts.length, 1);
-  check('and the send still succeeds', sentTo(unreachableRes), { ok: true, reason: 'sent_backup' });
+  check('an unreachable service does not fall back', unreachable.formPosts.length, 0);
+  check('the send fails honestly', sentTo(unreachableRes), { ok: false, reason: 'unreachable' });
   check('with no mention of the plumbing behind it',
     /own mail service|could not be reached/.test(unreachableRes.msg), false);
-  check('it still reads as submitted, with the advice to confirm it',
-    [/submitted/i.test(unreachableRes.msg), /check with the office/.test(unreachableRes.msg)], [true, true]);
+  check('and the draft is still saved', /draft is still saved/.test(unreachableRes.msg), true);
+  check('and asks for a retry', /try again/.test(unreachableRes.msg), true);
 
   // ── 4. The size ceiling is the one that will actually apply ───────────────
   // js/app.js renders a smaller PDF against whatever this file reports, so a
@@ -336,20 +324,6 @@ const parts = (r) => (r.sent[0] ? [...r.sent[0].form.keys()] : []);
     /over the 20 MB email attachment limit/.test(bigRes.msg), true);
   check('and the size, so the consultant can see how far over it is',
     /21\.0 MB/.test(bigRes.msg), true);
-
-  // A PDF that fits the backend but not the smaller backup, sent while the backend
-  // has no mailbox: the fallback refuses it, and that has to be explained rather
-  // than reported as a size the consultant was never warned about.
-  const tooBigForBackup = load(CFG, () => ({ status: 503, body: { error: 'email_not_configured' } }));
-  const tooBigRes = await tooBigForBackup.email.send(pdfBlob(12 * 1024 * 1024), 'app.pdf', CFG);
-
-  check('a PDF the backup cannot take is a failure', sentTo(tooBigRes),
-    { ok: false, reason: 'too_large' });
-  check('the old path refused it rather than posting it', tooBigForBackup.formPosts.length, 0);
-  check('and the message says plainly that the PDF is too large for the mail system',
-    /larger than this email system accepts/.test(tooBigRes.msg), true);
-  check('without blaming a service or naming a provider',
-    /own mail service|FormSubmit|backup/.test(tooBigRes.msg), false);
 
   // ── 5. With nothing configured, today's app behaves exactly as before ─────
   const noBackend = load({ recipientEmail: OFFICE }, () => {

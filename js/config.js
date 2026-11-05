@@ -13,10 +13,11 @@ window.ITC_CONFIG = {
   // ALLOWED_ORIGINS, so the requests below are accepted from here.
   //
   // js/email.js uses this same base: "Submit & Email" sends the finished PDF to
-  // <signatureApiBase>/api/email, which mails it from the office's own mailbox
-  // and answers with a real status. It falls back to the FormSubmit path when
-  // that service says it has no mailbox configured (503) or does not answer at
-  // all (the sleep below), and the message on screen then says so.
+  // <signatureApiBase>/api/email, which stores it in the office's report bucket
+  // first, then mails it from the office's own mailbox and answers with a real
+  // status. If the mailbox is missing (503) or refuses the message (502) the PDF
+  // is still in the bucket and the message on screen says so — it does not fall
+  // back to FormSubmit any more.
   //
   // The free Render instance sleeps after ~15 minutes idle and takes up to a
   // minute to wake; js/signature.js wakes it with a repeated /health read

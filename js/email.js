@@ -1,22 +1,28 @@
-// Email of the generated PDF (the app intentionally never downloads PDFs —
-// drafts live only in the browser's localStorage; see js/app.js).
+// Email of the generated PDF. The app itself deliberately never downloads PDFs —
+// drafts live only in the browser's localStorage, and the office's own copy is
+// the report bucket on the backend, which stores every submission before it is
+// emailed. So a report is never lost just because an email did not arrive, and
+// there is no public download button to expose an applicant's data on a shared
+// screen: the PDFs come out only through the backend's admin endpoints.
 //
 // ── Two transports, in this order ─────────────────────────────────────────
 // 1. THE KHUSELA BACKEND — POST <signatureApiBase>/api/email, the service named
-//    in js/config.js. It mails the PDF from the office's own mailbox (the
-//    recipient is the service's own setting, so the request cannot name one) and
-//    answers with a real HTTP status, which is what lets this file tell the
-//    truth about whether the application went. Used whenever signatureApiBase is
-//    configured.
-// 2. FORMSUBMIT (https://formsubmit.co) — the original no-backend path, kept as
-//    the fallback for the states transport 1 cannot cover: no signatureApiBase,
-//    the service answering 503 "email_not_configured" (its mailbox has not been
-//    set up yet), or the service not answering at all (the free Render instance
-//    sleeps after ~15 minutes idle). Every message from this path says which one
-//    it was, because FormSubmit's answer cannot be read (see below) and on
-//    2026-09-30 it answered every submission with a 500 — its own documentation
-//    page did too — while the app reported success. That is why the backend path
-//    exists; a send through the old path is never described as delivered.
+//    in js/config.js. It STORES the PDF in its report bucket first, then mails it
+//    from the office's own mailbox (the recipient is the service's own setting,
+//    so the request cannot name one) and answers with a real HTTP status, which
+//    is what lets this file tell the truth about whether the application went:
+//    emailed, backed-up-but-not-emailed (no mailbox: 503 email_not_configured +
+//    stored:true), refused (502 + stored:true), or unreachable (nothing stored —
+//    retry; the draft is still on this device). Used whenever signatureApiBase is
+//    configured, and it is the ONLY path used then: there is no FormSubmit
+//    fallback, because FormSubmit cannot confirm delivery and has been down
+//    anyway.
+// 2. FORMSUBMIT (https://formsubmit.co) — the original no-backend path, kept ONLY
+//    for a deployment with no signatureApiBase configured. Its answer cannot be
+//    read (see below) and on 2026-09-30 it answered every submission with a 500
+//    — its own documentation page did too — while the app reported success, and
+//    on 2026-11-05 it answered 522. A send through this path is never described
+//    as delivered.
 //
 // ── How FormSubmit behaves (important for the PDF to actually arrive) ──────
 // 1. The FIRST submission to a new recipient address only sends that address a
@@ -216,10 +222,10 @@
 
   // A plain fetch() with FormData, the opposite of the FormSubmit rule above: this
   // is a JSON-answering API, so the status is the whole point. The PDF arrives as
-  // the multipart field "attachment"; everything else is descriptive. `fallback`
-  // in the answer is what tells send() the old path may still be tried — it is set
-  // only where the backend has said (or shown) that it cannot send at all, never
-  // where it tried and failed.
+  // the multipart field "attachment"; everything else is descriptive. The backend
+  // stores the PDF in its report bucket before emailing, so 503 (no mailbox) and
+  // 502 (refused) both carry stored:true — the consultant is told the application
+  // is safe rather than handed to a fallback service that cannot confirm delivery.
   async function sendViaBackend(blob, filename, cfg, applicant) {
     const form = new FormData();
     form.append('attachment', blob, filename);
@@ -248,6 +254,16 @@
       const detail = (data && (data.error || data.message)) || ('the mail service answered with an error');
 
       if (res.ok) {
+        // linkOnly is set when the delivery provider could not carry the file and
+        // the office's email carries a secure download link instead. Do not tell
+        // the consultant the PDF was attached when it was not.
+        if (data && data.linkOnly) {
+          return {
+            ok: true,
+            reason: 'sent',
+            msg: 'Your application has been emailed to the Khusela office. The email carries a secure link to the completed PDF. Your draft is still saved in this browser.',
+          };
+        }
         return {
           ok: true,
           reason: 'sent',
@@ -255,9 +271,16 @@
         };
       }
       if (res.status === 503) {
-        // "email_not_configured": this service has no mailbox set up. It did not
-        // try to send anything, which is exactly the case the old path is for.
-        return { ok: false, fallback: true, why: 'is not set up yet', reason: 'no_mailbox' };
+        // "email_not_configured": this service has no mailbox set up, so it could
+        // not email anything — but it HAS stored the PDF in its report bucket
+        // (stored:true). The consultant is told that, not handed to a fallback
+        // service that cannot confirm delivery (and has been down anyway).
+        return {
+          ok: false,
+          reason: 'stored_not_emailed',
+          stored: !!(data && data.stored),
+          msg: 'Your application has been saved to the office\'s report bucket, but no delivery service is set up on it yet, so it was not emailed. Tell the office to finish setting up email — they can download the PDF from the bucket meanwhile. Your draft is still saved in this browser.',
+        };
       }
       if (res.status === 429) {
         return {
@@ -274,23 +297,25 @@
         };
       }
       // 400/413/500/502 and anything else: the service took the request and could
-      // not deliver it. Falling back here would trade a message that says the
-      // application did not go for one that cannot be read at all.
+      // not deliver it. The PDF is still in the bucket (stored:true), so nothing
+      // is lost, and the message says so rather than falling back to a service
+      // that cannot confirm delivery.
       return {
         ok: false,
         reason: 'refused',
-        msg: 'The application was NOT submitted: ' + plainReason(detail) +
-          ' Nothing was sent — tell the office, and press Submit & Email to retry. Your draft is still saved in this browser.',
+        stored: !!(data && data.stored),
+        msg: 'The application was NOT emailed: ' + plainReason(detail) +
+          ' It has been saved to the office\'s report bucket, so the office can still download it — tell the office, and press Submit & Email to retry. Your draft is still saved in this browser.',
       };
     } catch (e) {
       // No status at all: the service is unreachable, still waking up, or its
-      // CORS answer never arrived (a refused origin looks like this too). The
-      // older path is worth trying, and the message will say it was used.
+      // CORS answer never arrived (a refused origin looks like this too). There
+      // is nothing to store when the service cannot be reached, so the only copy
+      // is still on this device — say so, and ask for a retry.
       return {
         ok: false,
-        fallback: true,
-        why: (e && e.name === 'AbortError') ? 'did not answer in time' : 'could not be reached',
         reason: (e && e.name === 'AbortError') ? 'timeout' : 'unreachable',
+        msg: 'Could not reach the office server, so the application was not sent or saved. Your draft is still saved in this browser — try again in a moment.',
       };
     } finally {
       clearTimeout(timer);
@@ -298,8 +323,11 @@
   }
 
   // ── The send itself ───────────────────────────────────────────────────────
-  // The backend first, the old path only for the states it cannot cover, and a
-  // message that always says which of the two carried the application.
+  // The backend first, and its answer is the whole story: it stores every
+  // submission in its report bucket before emailing, so the message always says
+  // what actually happened — emailed, backed up but not emailed, refused, or
+  // unreachable. The old FormSubmit path is kept ONLY for a deployment with no
+  // backend configured at all; it can never confirm delivery.
   async function send(blob, filename, cfg) {
     const fail = (reason, msg) => ({ ok: false, reason: reason, msg: msg });
 
@@ -315,23 +343,7 @@
     }
 
     if (backendBase(cfg)) {
-      const res = await sendViaBackend(blob, filename, cfg, readApplicant());
-      if (!res.fallback) return res;
-      const res2 = await sendViaFormSubmit(blob, filename, cfg);
-      if (!res2.ok) {
-        // The one failure that needs explaining: the backup path has a smaller
-        // ceiling, and app.js only re-rendered a smaller PDF against the limit
-        // this file reported, which was the backend's.
-        if (res2.reason === 'too_large') {
-          return fail('too_large', 'The PDF is ' + (blob.size / 1048576).toFixed(1) + ' MB — larger than this email system accepts, and the other route is not available at the moment. Nothing was sent; your draft is still saved in this browser.');
-        }
-        return res2;
-      }
-      return {
-        ok: true,
-        reason: 'sent_backup',
-        msg: 'Application submitted. Please check with the office that it arrived. Your draft is still saved in this browser.',
-      };
+      return sendViaBackend(blob, filename, cfg, readApplicant());
     }
 
     return sendViaFormSubmit(blob, filename, cfg);
