@@ -41,4 +41,12 @@ window.ITC_CONFIG = {
   // Whatever this says, nothing is sent until the consultant presses Send in that
   // window: the app only fills it in.
   mailWebmail: 'gmail',
+
+  // ── Optional: Vicidial call recording as evidence ────────────────────────
+  // This app never talks to Vicidial and never holds a Vicidial password: the
+  // consultant's login and date go to our backend, which looks up the call and
+  // fetches the MP3. Add the pilot group's Vicidial logins here to give the
+  // consultant a pick-list; free text works too, so this may be left empty.
+  // (e.g. vicidialConsultants: ['1001', '1002', '1003'])
+  vicidialConsultants: [],
 };

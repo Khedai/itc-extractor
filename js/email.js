@@ -88,7 +88,7 @@
   // bucket before emailing, so 503 (no mailbox) and 502 (refused) both carry
   // stored:true — the consultant is told the application is safe rather than
   // handed to a service that cannot confirm delivery.
-  async function sendViaBackend(blob, filename, cfg, applicant) {
+  async function sendViaBackend(blob, filename, cfg, applicant, recording) {
     const form = new FormData();
     form.append('attachment', blob, filename);
     if (applicant.name) form.append('applicant', applicant.name);
@@ -98,6 +98,13 @@
     // Only the reply address: the service decides the recipient and ignores any
     // address a request names (a browser-callable route must not be a mail relay).
     if (applicant.email) form.append('replyTo', applicant.email);
+    // Optional voice evidence. The backend stores it on the SAME submission as
+    // the PDF and either attaches it to the office email or sends a signed link
+    // when the message would be too large. It is never a separate record.
+    if (recording && recording.blob && recording.blob.size) {
+      form.append('recording', recording.blob, recording.filename || 'call-recording.mp3');
+      form.append('recordingName', recording.filename || 'call-recording.mp3');
+    }
 
     const controller = typeof AbortController === 'function' ? new AbortController() : null;
     const timer = controller ? setTimeout(() => controller.abort(), UPLOAD_TIMEOUT_MS) : null;
@@ -121,17 +128,22 @@
         // linkOnly is set when the delivery provider could not carry the file and
         // the office's email carries a secure download link instead. Do not tell
         // the consultant the PDF was attached when it was not.
+        const recLine = recording
+          ? (data && data.recordingLinkOnly
+            ? ' The call recording is included as a secure link.'
+            : ' The call recording is attached as well.')
+          : ' No call recording was supplied with this application.';
         if (data && data.linkOnly) {
           return {
             ok: true,
             reason: 'sent',
-            msg: 'Your application has been emailed to the Khusela office. The email carries a secure link to the completed PDF. Your draft is still saved in this browser.',
+            msg: 'Your application has been emailed to the Khusela office. The email carries a secure link to the completed PDF.' + recLine + ' Your draft is still saved in this browser.',
           };
         }
         return {
           ok: true,
           reason: 'sent',
-          msg: 'Your application has been emailed to the Khusela office, with the completed PDF attached. Your draft is still saved in this browser.',
+          msg: 'Your application has been emailed to the Khusela office, with the completed PDF attached.' + recLine + ' Your draft is still saved in this browser.',
         };
       }
       if (res.status === 503) {
@@ -194,7 +206,7 @@
   // ── The send itself ───────────────────────────────────────────────────────
   // The backend is the only path. If it is not configured there is nothing that
   // can honestly report delivery, so the send is refused before any request.
-  async function send(blob, filename, cfg) {
+  async function send(blob, filename, cfg, recording) {
     const fail = (reason, msg) => ({ ok: false, reason: reason, msg: msg });
 
     // Checked here rather than inside the transport: every failure would look the
@@ -208,11 +220,14 @@
     if (blob.size > MAX_ATTACHMENT_BYTES) {
       return fail('too_large', 'The PDF is ' + (blob.size / 1048576).toFixed(1) + ' MB — over the ' + MAX_ATTACHMENT_MB + ' MB email attachment limit. Nothing was sent; your draft is still saved in this browser.');
     }
+    if (recording && recording.blob && recording.blob.size > 15 * 1024 * 1024) {
+      return fail('recording_too_large', 'The call recording is ' + (recording.blob.size / 1048576).toFixed(1) + ' MB — over the 15 MB recording limit. Nothing was sent; your draft is still saved in this browser.');
+    }
     if (!backendBase(cfg)) {
       return fail('not_configured', 'Email is not configured: set signatureApiBase in js/config.js to the Khusela office server. Nothing was sent — your draft is still saved in this browser.');
     }
 
-    return sendViaBackend(blob, filename, cfg, readApplicant());
+    return sendViaBackend(blob, filename, cfg, readApplicant(), recording);
   }
 
   window.ITCEmail = { send, MAX_ATTACHMENT_BYTES, MAX_ATTACHMENT_MB };

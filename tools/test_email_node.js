@@ -150,6 +150,24 @@ const parts = (r) => (r.sent[0] ? [...r.sent[0].form.keys()] : []);
   check('and the label travels with the other identifying fields',
     parts(signed), ['attachment', 'applicant', 'idNumber', 'signerLabel', 'date', 'replyTo']);
 
+  // Optional voice evidence: one recording, on the same submission as the PDF.
+  const recording = {
+   blob: new Blob([Buffer.alloc(1000)], { type: 'audio/mpeg' }),
+   filename: '20261118_101112_1001-all.mp3',
+  };
+  const withRec = load(CFG, () => ({ status: 200, body: { ok: true, recordingStored: true } }));
+  const recRes = await withRec.email.send(pdfBlob(2048), 'app.pdf', CFG, recording);
+  check('the MP3 travels in its own recording field',
+    parts(withRec), ['attachment', 'applicant', 'idNumber', 'date', 'replyTo', 'recording', 'recordingName']);
+  check('under the filename the panel gave it',
+    (part(withRec, 'recording') || {}).name, '20261118_101112_1001-all.mp3');
+  check('the consultant is told the recording went too',
+    /call recording is attached as well/.test(recRes.msg), true);
+  const recLink = load(CFG, () => ({ status: 200, body: { ok: true, linkOnly: true, recordingLinkOnly: true } }));
+  const recLinkRes = await recLink.email.send(pdfBlob(2048), 'app.pdf', CFG, recording);
+  check('a link-only recording is not claimed as an attachment',
+    /secure link\./.test(recLinkRes.msg) && /attached/.test(recLinkRes.msg), false);
+
   // When Formspree's free plan refuses the PDF, the backend still emails the
   // office with a secure link. The message must not claim a file was attached.
   const linkSent = load(CFG, () => ({ status: 200, body: { ok: true, stored: true, linkOnly: true } }));

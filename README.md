@@ -192,6 +192,34 @@ Notes:
 - If a request fails (backend down, address wrong) the panel shows a short error
   and nothing else about the application is affected.
 
+## Call recording (optional voice evidence)
+
+A consultant can attach **one Vicidial call recording to the application they are
+building**. It is optional: when none is selected, the office email says
+**"No call recording was attached to this application"**, and the PDF footer says
+`Call recording: not provided`. When one is selected, the PDF footer names the
+file and the MP3 is stored on the backend with the PDF and sent with it (attached
+when the message fits, otherwise as a signed download link, exactly like the PDF).
+
+The panel sits below the signing panels, **outside the form**, so none of its
+chrome is ever captured in the PDF. It asks for the consultant's **own Vicidial
+login** and the **call date**; the app remembers the login on that PC after the
+first use. `vicidialConsultants` in `js/config.js` can list the pilot group's
+logins as a pick-list; free text works too. The app never holds a Vicidial
+password — the backend owns those.
+
+The recording follows the same per-application rule as a signature: it is cleared
+on **New Application**, on a **successful Submit & Email**, and when a **different
+ITC report** is extracted. A failed send leaves it in place so a retry keeps the
+evidence.
+
+Setup is server-side (see `khusela-signature-backend/README.md`): the backend needs
+`VICIDIAL_BASE_URL`, `VICIDIAL_API_USER`, `VICIDIAL_API_PASS`, and — if
+`/RECORDINGS/` is password-protected or not reachable from the host — the
+`VICIDIAL_RECORDINGS_*` settings. With none set, pressing **Find recordings**
+answers "Vicidial recording lookup is not configured on this server" and nothing
+is sent to Vicidial; submitting still works exactly as before.
+
 ## Where are drafts saved?
 
 Drafts are **autosaved to the browser's `localStorage` on the device you're
@@ -368,6 +396,7 @@ khusela-itc-pwa/
 │   ├── email.js        # backend email send (no download)
 │   ├── tracker.js      # Khusela Sales Tracker (browser XLSX tracker)
 │   ├── signature.js    # remote signing requests (link, status, signature)
+│   ├── recording.js    # optional Vicidial call recording (lookup, select, attach)
 │   └── app.js          # wiring: extract, fill, submit, reset
 ├── vendor/             # pdf.js, html2canvas, jsPDF (offline)
 ├── icons/              # PWA icons (regenerate: powershell tools/make_icons.ps1)
@@ -410,6 +439,14 @@ node tools/test_email_node.js
 > answered as a success again, if a 503 / unreachable service is ever reported as
 > delivered, if the recipient is ever taken from the request instead of the
 > service's own setting, or if the PDF stops travelling in the `attachment` field.
+
+The optional call-recording panel has its own plain-Node test, which drives the
+module in a stub page and checks that a recording is per-application and is
+forgotten on clear:
+
+```bash
+node tools/test_recording_node.js
+```
 
 The service worker's caching strategy has a plain-Node test too — it drives
 `sw.js` in a stub scope, so a page that a deploy should have replaced cannot go

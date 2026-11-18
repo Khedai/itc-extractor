@@ -217,6 +217,7 @@
       <span>Time of call: <input type="text" name="call_time"></span>
       <span>EXT number: <input type="text" name="ext_number"></span>
       <span class="checkline"><label>CPI <input type="checkbox" name="cpi"></label><label>CELL PHONE <input type="checkbox" name="cell_phone"></label><label>OTHER <input type="checkbox" name="other"></label></span>
+      <span>Call recording: <b id="recordingPdfNote">not provided</b></span>
     </div>
   </div>
  
@@ -263,7 +264,33 @@
       <div class="sig-note" id="sigNote2"></div>
     </section>
   </div>
- 
+
+  <!-- Call recording (optional voice evidence) — deliberately OUTSIDE #formPage,
+       like the signing panels, so it can never be captured inside the PDF. Only
+       the short "Call recording: attached / not provided" line in the footer is
+       part of the application itself. -->
+  <section class="recording-panel" id="recordingPanel" hidden>
+    <h2 class="recording-title">Call recording (optional)</h2>
+    <p class="recording-hint">Attach the Vicidial call that produced this application as voice evidence. It travels with the PDF; if you leave it out, the email says so explicitly.</p>
+    <div class="recording-grid">
+      <label>Your Vicidial login
+        <input id="recConsultant" type="text" list="recConsultantOptions" placeholder="e.g. 1001" autocomplete="off">
+        <datalist id="recConsultantOptions"></datalist>
+      </label>
+      <label>Call date <input id="recDate" type="date"></label>
+    </div>
+    <div class="recording-actions">
+      <button type="button" class="btn" id="btnFindRecordings">Find recordings</button>
+      <button type="button" class="btn secondary" id="btnClearRecording" hidden>Clear selected recording</button>
+    </div>
+    <div class="recording-status" id="recordingStatus"></div>
+    <div class="recording-list" id="recordingList"></div>
+    <div class="recording-selected" id="recordingSelected" hidden>
+      <b>Attached to this application:</b> <span id="recordingSelectedName"></span>
+      <audio id="recordingPreview" controls preload="none"></audio>
+    </div>
+  </section>
+  
   <!-- PWA registration -->
   <script>
     if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol)) {
@@ -302,6 +329,7 @@
   <script src="js/email.js"></script>
   <script src="js/tracker.js"></script>
   <script src="js/signature.js"></script>
+  <script src="js/recording.js"></script>
   <script src="js/app.js"></script>
 </body>
 </html>

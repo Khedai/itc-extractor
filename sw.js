@@ -10,12 +10,12 @@
 //   • everything else (vendor libraries, modules, icons) is cache-first: those files
 //     change rarely and are large, and serving them from the cache is what makes the
 //     app work offline.
-// js/email.js, js/app.js and js/signature.js are cache-first, so a device that has
+// js/email.js, js/app.js, js/signature.js and js/recording.js are cache-first, so a device that has
 // visited before keeps the copy it captured until this name changes: the version
 // below moves with every change to any of them, or a deploy that reworks how an
 // application is emailed or signed would simply not reach the browsers that used
 // the old build.
-const CACHE = 'khusela-itc-v44';
+const CACHE = 'khusela-itc-v45';
 const ASSETS = [
   './',
   './index.html',
@@ -28,6 +28,7 @@ const ASSETS = [
   './js/email.js',
   './js/tracker.js',
   './js/signature.js',
+  './js/recording.js',
   './js/app.js',
   './vendor/pdf.min.js',
   './vendor/pdf.worker.min.js',

@@ -104,6 +104,11 @@ check('the old buttons are gone from the signature boxes',
 const pageEnd = html.indexOf('<!-- Client Digital Signing');
 check('the panels sit outside #formPage, so they cannot reach the PDF',
   pageEnd > html.lastIndexOf('id="formPage"') && pageEnd > 0, true);
+const recStart = html.indexOf('<!-- Call recording (optional voice evidence)');
+check('the call-recording panel also sits outside #formPage',
+  recStart > html.lastIndexOf('id="formPage"') && recStart > 0, true);
+check('the PDF footer carries a recording status line',
+  /id="recordingPdfNote"/.test(html) && html.indexOf('recordingPdfNote') < pageEnd, true);
 
 // ── Static server smoke test ───────────────────────────────────────────────
 const mime = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.json': 'application/manifest+json', '.png': 'image/png', '.webmanifest': 'application/manifest+json' };
@@ -120,7 +125,7 @@ const server = http.createServer((req, res) => {
 
 server.listen(0, async () => {
   const port = server.address().port;
-  const urls = ['/', '/index.html', '/css/styles.css', '/js/app.js', '/js/itcParser.js', '/js/tracker.js', '/js/signature.js', '/js/config.js', '/manifest.webmanifest', '/sw.js', '/vendor/pdf.min.js', '/vendor/pdf.worker.min.js', '/vendor/html2canvas.min.js', '/vendor/jspdf.umd.min.js', '/logo.png', '/icons/icon-192.png'];
+  const urls = ['/', '/index.html', '/css/styles.css', '/js/app.js', '/js/itcParser.js', '/js/tracker.js', '/js/signature.js', '/js/recording.js', '/js/config.js', '/manifest.webmanifest', '/sw.js', '/vendor/pdf.min.js', '/vendor/pdf.worker.min.js', '/vendor/html2canvas.min.js', '/vendor/jspdf.umd.min.js', '/logo.png', '/icons/icon-192.png'];
   let bad = 0;
   for (const u of urls) {
     const code = await new Promise((resolve) => {

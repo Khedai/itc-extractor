@@ -296,6 +296,9 @@
       const forgotten = (window.ITCSignature && window.ITCSignature.clear)
         ? (window.ITCSignature.clear() || 0)
         : 0;
+      // A different report is a different applicant: last client's voice
+      // evidence must not be left attached to the next one's application.
+      if (window.ITCRecording && window.ITCRecording.clear) window.ITCRecording.clear();
 
       fillForm(d);
       const cur = (d.accounts || []).reduce((s, a) => s + (a.instalment || 0), 0);
@@ -352,6 +355,9 @@
       if (window.ITCSignature && window.ITCSignature.refreshAll) {
         try { await window.ITCSignature.refreshAll(); } catch (e) {}
       }
+      // The footer line is part of the form and therefore of this PDF. It must
+      // reflect the recording selected for THIS application, not the previous one.
+      if (window.ITCRecording && window.ITCRecording.note) window.ITCRecording.note();
       let blob = await generatePdf();
       if (blob.size > MAX_ATTACH_BYTES) {
         btn.textContent = 'Compressing PDF…';
@@ -367,7 +373,13 @@
       btn.textContent = 'Sending email…';
       showSending('Sending your email…', 'Uploading the PDF to the office server', SEND_TIPS[0]);
       startSendTips();
-      const res = await window.ITCEmail.send(blob, filename, CONFIG);
+      // One recording per application: the panel holds at most one selection,
+      // and only a send that actually happened forgets it (a failure keeps it so
+      // a retry does not lose the evidence).
+      const recording = (window.ITCRecording && window.ITCRecording.enabled())
+        ? window.ITCRecording.getAttachment()
+        : null;
+      const res = await window.ITCEmail.send(blob, filename, CONFIG, recording);
       hideSending();
       // The application that has just gone is finished, and the signature captured
       // for it belongs to it alone. Leaving it in the box is what let it follow the
@@ -381,6 +393,9 @@
       const forgotten = (res.ok && window.ITCSignature && window.ITCSignature.clear)
         ? (window.ITCSignature.clear() || 0)
         : 0;
+      // The application has gone, so its recording must not follow the consultant
+      // into the next client's application — exactly the rule the signature obeys.
+      if (res.ok && window.ITCRecording && window.ITCRecording.clear) window.ITCRecording.clear();
       showResult(res.ok, res.msg + (forgotten
         ? ' The signature box' + (forgotten === 1 ? ' has' : 'es have') +
           ' been cleared for the next application.'
@@ -418,6 +433,7 @@
     try { localStorage.removeItem(DRAFT_KEY); } catch (e) {}
     // Pending / captured signature requests belong to the application being cleared.
     if (window.ITCSignature && window.ITCSignature.clear) window.ITCSignature.clear();
+    if (window.ITCRecording && window.ITCRecording.clear) window.ITCRecording.clear();
     calc();
     setStatus('ok', 'Form and saved draft cleared. Upload a Datanamix ITC PDF to fill it automatically.');
     hideResult();

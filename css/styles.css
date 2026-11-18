@@ -125,6 +125,28 @@ td input,td select{border:0;height:25px;padding:3px}
 .signing-link{font-family:Consolas,Menlo,monospace;font-size:12px}
 .signing-link[readonly]{background:#f7f9fc}
 
+/* Optional Vicidial call recording — same rule as the signing panels: outside
+   #formPage, and hidden in print so it never reaches the PDF. */
+.recording-panel{width:min(1500px,98vw);margin:0 auto 16px;border:2px solid #1565c0;border-radius:6px;background:#fff;padding:12px 14px;box-shadow:0 2px 8px #0001}
+.recording-panel[hidden]{display:none}
+.recording-title{font-size:19px;font-weight:800;color:#14539a;margin:0 0 6px}
+.recording-hint{margin:0 0 10px;color:#3c4a44}
+.recording-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.recording-grid label{display:flex;flex-direction:column;gap:4px}
+.recording-grid input{height:32px}
+.recording-actions{display:flex;flex-wrap:wrap;gap:10px;margin:12px 0}
+.recording-actions .btn{min-height:38px}
+.recording-status{font-size:13px;margin:8px 0}
+.recording-status.ok{color:#145c2e}
+.recording-status.err{color:#b00020}
+.recording-list{display:grid;gap:8px}
+.recording-item{border:1px solid #d6e4f0;border-radius:6px;padding:8px;display:flex;flex-wrap:wrap;gap:10px;align-items:center;background:#fafcff}
+.recording-item .meta{flex:1 1 300px;font-size:13px}
+.recording-item audio{height:32px;max-width:280px}
+.recording-selected{border:1px solid #2e7d32;background:#f2faf3;border-radius:6px;padding:8px 10px;margin-top:10px;font-size:13px}
+.recording-selected[hidden]{display:none}
+.recording-selected audio{display:block;width:100%;max-width:420px;margin-top:6px;height:34px}
+
 /* ── Result notifications ─────────────────────────────────────── */
 .result-panel{margin:8px 10px;border:1px solid #5b9b72;background:#edf8f0;padding:10px;display:none}
 .result-panel.show{display:block}
@@ -180,7 +202,7 @@ td input,td select{border:0;height:25px;padding:3px}
 
 /* ── Print — only the application form prints (panels/toolbar hidden) ──── */
 @media print{
-.toolbar,.draft-note,.itc-panel,.itc-review,.result-panel,.signing-panels{display:none}
+.toolbar,.draft-note,.itc-panel,.itc-review,.result-panel,.signing-panels,.recording-panel{display:none}
 body{background:#fff}
 .page{width:100%;margin:0;box-shadow:none}
 }
