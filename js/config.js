@@ -48,5 +48,9 @@ window.ITC_CONFIG = {
   // fetches the MP3. Add the pilot group's Vicidial logins here to give the
   // consultant a pick-list; free text works too, so this may be left empty.
   // (e.g. vicidialConsultants: ['1001', '1002', '1003'])
-  vicidialConsultants: [],
+  vicidialConsultants: [
+    '1015', '1005', '1024', '1010', '3014', '1014', '1071', '1028',
+    '1016', '1022', '3015', '1072', '1070', '3016', '1064', '3019',
+    '1033', '3013', '1018', '1063', '1019', '1027',
+  ],
 };
