@@ -46,14 +46,41 @@
     selected = null;
     rows = [];
     const list = $('recordingList');
-    if (list) list.innerHTML = '';
+    if (list) { list.innerHTML = ''; list.hidden = false; }
     const box = $('recordingSelected');
     if (box) box.hidden = true;
     const preview = $('recordingPreview');
     if (preview) preview.removeAttribute('src');
+    // Back to the search state: no selection, the Find button available.
+    const findBtn = $('btnFindRecordings');
+    if (findBtn) findBtn.hidden = false;
+    const changeBtn = $('btnChangeRecording');
+    if (changeBtn) changeBtn.hidden = true;
     const clearBtn = $('btnClearRecording');
     if (clearBtn) clearBtn.hidden = true;
     note();
+  }
+
+  // Keep the rows, but go back to the list so another call can be chosen. The
+  // previously attached file is released first, so only one ever remains.
+  function change() {
+    if (previewUrl) { try { URL.revokeObjectURL(previewUrl); } catch (e) {} }
+    previewUrl = null;
+    selected = null;
+    const box = $('recordingSelected');
+    if (box) box.hidden = true;
+    const preview = $('recordingPreview');
+    if (preview) preview.removeAttribute('src');
+    const list = $('recordingList');
+    if (list) list.hidden = false;
+    const findBtn = $('btnFindRecordings');
+    if (findBtn) findBtn.hidden = false;
+    const changeBtn = $('btnChangeRecording');
+    if (changeBtn) changeBtn.hidden = true;
+    const clearBtn = $('btnClearRecording');
+    if (clearBtn) clearBtn.hidden = true;
+    note();
+    setStatus('Choose another recording from the list, or press Find recordings to search again.');
   }
 
   function select(row, blob) {
@@ -66,6 +93,14 @@
     if (name) name.textContent = selected.filename + (row.start_time ? '  (' + row.start_time + ')' : '');
     const preview = $('recordingPreview');
     if (preview) preview.src = previewUrl;
+    // The list collapses so only the chosen recording remains visible. Change
+    // reopens it; Remove forgets it entirely.
+    const list = $('recordingList');
+    if (list) list.hidden = true;
+    const findBtn = $('btnFindRecordings');
+    if (findBtn) findBtn.hidden = true;
+    const changeBtn = $('btnChangeRecording');
+    if (changeBtn) changeBtn.hidden = false;
     const clearBtn = $('btnClearRecording');
     if (clearBtn) clearBtn.hidden = false;
     note();
@@ -188,8 +223,10 @@
 
     const findBtn = $('btnFindRecordings');
     if (findBtn) findBtn.addEventListener('click', find);
+    const changeBtn = $('btnChangeRecording');
+    if (changeBtn) changeBtn.addEventListener('click', change);
     const clearBtn = $('btnClearRecording');
-    if (clearBtn) clearBtn.addEventListener('click', () => { clear(); setStatus('Recording cleared for this application.'); });
+    if (clearBtn) clearBtn.addEventListener('click', () => { clear(); setStatus('Recording removed. The email will say no call recording was attached.'); });
     if (input) input.addEventListener('change', remember);
     note();
   }
@@ -200,7 +237,7 @@
   // The attachment passed to js/email.js. null means "no recording", and the
   // office email will say so explicitly.
   window.ITCRecording = {
-    init, find, clear, note, enabled,
+    init, find, change, clear, note, enabled,
     hasRecording: () => !!selected,
     getAttachment: () => selected ? { blob: selected.blob, filename: selected.filename } : null,
   };

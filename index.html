@@ -281,12 +281,14 @@
     </div>
     <div class="recording-actions">
       <button type="button" class="btn" id="btnFindRecordings">Find recordings</button>
-      <button type="button" class="btn secondary" id="btnClearRecording" hidden>Clear selected recording</button>
+      <button type="button" class="btn secondary" id="btnChangeRecording" hidden>Change recording</button>
+      <button type="button" class="btn secondary" id="btnClearRecording" hidden>Remove recording</button>
     </div>
     <div class="recording-status" id="recordingStatus"></div>
     <div class="recording-list" id="recordingList"></div>
     <div class="recording-selected" id="recordingSelected" hidden>
-      <b>Attached to this application:</b> <span id="recordingSelectedName"></span>
+      <div class="recording-selected-head">✓ Attached to this application</div>
+      <div class="recording-selected-name" id="recordingSelectedName"></div>
       <audio id="recordingPreview" controls preload="none"></audio>
     </div>
   </section>

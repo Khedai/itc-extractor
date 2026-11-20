@@ -146,6 +146,8 @@ td input,td select{border:0;height:25px;padding:3px}
 .recording-selected{border:1px solid #2e7d32;background:#f2faf3;border-radius:6px;padding:8px 10px;margin-top:10px;font-size:13px}
 .recording-selected[hidden]{display:none}
 .recording-selected audio{display:block;width:100%;max-width:420px;margin-top:6px;height:34px}
+.recording-selected-head{font-weight:800;color:#145c2e;margin-bottom:4px}
+.recording-selected-name{font-size:13px;word-break:break-word}
 
 /* ── Result notifications ─────────────────────────────────────── */
 .result-panel{margin:8px 10px;border:1px solid #5b9b72;background:#edf8f0;padding:10px;display:none}

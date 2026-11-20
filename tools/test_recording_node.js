@@ -41,7 +41,7 @@ class El {
 function load(cfg, lookupRows) {
  const els = {};
  ['recordingPanel', 'recConsultant', 'recConsultantOptions', 'recDate', 'btnFindRecordings',
-  'btnClearRecording', 'recordingStatus', 'recordingList', 'recordingSelected',
+  'btnChangeRecording', 'btnClearRecording', 'recordingStatus', 'recordingList', 'recordingSelected',
   'recordingSelectedName', 'recordingPreview', 'recordingPdfNote'].forEach((id) => { els[id] = new El('input', id); });
  const fetches = [];
  const audio = { size: 4321 };
@@ -112,7 +112,14 @@ function load(cfg, lookupRows) {
  check('the attachment carries the MP3 bytes', att && att.blob.size, 4321);
  check('the attachment carries the filename', att && att.filename, '20261118_101112_1001-all.mp3');
  check('the PDF footer now says attached', /^attached/.test(els.recordingPdfNote.textContent), true);
- check('the Clear button appears', els.btnClearRecording.hidden, false);
+ check('the list collapses so only the chosen recording remains', els.recordingList.hidden, true);
+ check('the Find button is hidden once a recording is chosen', els.btnFindRecordings.hidden, true);
+ check('a Change and a Remove button appear', els.btnChangeRecording.hidden === false && els.btnClearRecording.hidden === false, true);
+
+ api.change();
+ check('Change releases the attachment and reopens the list', api.hasRecording() === false && els.recordingList.hidden === false, true);
+ useBtn.click();
+ await new Promise((r) => setTimeout(r, 0));
 
  api.clear();
  check('clear forgets the recording', api.hasRecording(), false);
