@@ -175,8 +175,13 @@
       let data = null;
       try { data = await res.json(); } catch (e) { data = null; }
       if (!res.ok) {
-        const reason = (data && data.error) || ('HTTP ' + res.status);
-        throw new Error(reason);
+        const msg = (data && data.error) || '';
+        // The server's catch-all text ("could not complete that request") tells a
+        // consultant nothing useful, so swap it for something they can act on.
+        const vague = !msg || /could not complete that request/i.test(msg);
+        throw new Error(vague
+          ? 'the recording service is busy or unavailable right now. Try again in a moment'
+          : msg);
       }
       rows = (data && data.rows) || [];
       render();
